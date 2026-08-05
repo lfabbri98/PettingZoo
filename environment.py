@@ -4,7 +4,7 @@ Definizione di ambiente e regole del simulatore
 
 from dataclasses import dataclass
 import pygame
-import pyyaml as yaml
+import yaml
 from pathlib import Path
 
 def parse_parameters(config_name: str) -> dict:
@@ -56,3 +56,29 @@ class Player:
         self.x = x
         self.y = y
         self.color = color
+
+
+class TennisCourt:
+
+    """Definizione del campo da gioco"""
+
+    width: int
+    length: int
+
+    def __init__(self, court_config):
+        self.width = court_config["width"]
+        # Nel file di configurazione la dimensione lunga è chiamata ``height``;
+        # nell'oggetto la esponiamo come ``length`` per distinguere chiaramente
+        # i due lati del campo.
+        self.length = court_config["height"]
+
+    def draw_court(self, screen: pygame.Surface, color: tuple[int, int, int] = (52, 122, 76)) -> pygame.Rect:
+        """Disegna il campo centrato, con il lato lungo orientato verticalmente."""
+        court_rect = pygame.Rect(
+            (screen.get_width() - self.width) // 2,
+            (screen.get_height() - self.length) // 2,
+            self.width,
+            self.length,
+        )
+        pygame.draw.rect(screen, color, court_rect)
+        return court_rect
