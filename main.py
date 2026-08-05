@@ -14,6 +14,12 @@ def main() -> None:
     screen = create_screen(config["window"])
     court = env.TennisCourt(config["court"])
 
+    player_config = config["player"]
+    colors = config["colors"]
+
+    p1 = env.Player(500, 103, colors["player_bottom"], player_config)
+    p2 = env.Player(500, 547, colors["player_top"], player_config)
+
     running = True
     while running:
         for event in pygame.event.get():
@@ -22,6 +28,10 @@ def main() -> None:
 
         screen.fill(config["colors"]["background"])
         court.draw_court(screen, config["colors"]["court"])
+
+        p1.draw(screen)
+        p2.draw(screen)
+
         pygame.display.flip()
 
     pygame.quit()
