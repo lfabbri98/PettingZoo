@@ -1,0 +1,23 @@
+# Parametri del simulatore
+window:
+  width: 1000
+  height: 650
+  title: "Tennis simulator — step 1"
+  fps: 60
+
+court:
+  width: 100
+  height: 500
+
+player:
+  width: 55
+  height: 18
+  speed: 420  # pixel al secondo
+  baseline_offset: 28
+
+colors:
+  court: [52, 122, 76]
+  lines: [245, 245, 240]
+  player_top: [210, 76, 72]
+  player_bottom: [48, 118, 195]
+  background: [25, 25, 25]
