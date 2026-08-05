@@ -44,6 +44,10 @@ class Player:
     def draw(self, screen: pygame.Surface) -> None:
         pygame.draw.rect(screen, self.color, self.rect, border_radius=5)
 
+    def keep_inside(self, bounds: pygame.Rect) -> None:
+        self.x = max(bounds.left + self.width/2, min(self.x, bounds.right-self.width/2))
+        self.y = max(bounds.top + self.height / 2, min(self.y, bounds.bottom - self.height / 2))
+
     def __init__(self, x, y, color, player_config):
         """
         Nel costruttore inizializzo i parametri propri del giocatore
