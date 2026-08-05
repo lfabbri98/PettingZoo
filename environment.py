@@ -72,7 +72,12 @@ class TennisCourt:
         self.width = court_config["width"]
         self.length = court_config["height"]
 
-    def draw_court(self, screen: pygame.Surface, color: tuple[int, int, int] = (52, 122, 76)) -> pygame.Rect:
+    def draw_court(
+        self,
+        screen: pygame.Surface,
+        color: tuple[int, int, int] = (52, 122, 76),
+        line_color: tuple[int, int, int] = (245, 245, 240),
+    ) -> pygame.Rect:
         """Disegna il campo centrato, con il lato lungo orientato verticalmente."""
         court_rect = pygame.Rect(
             (screen.get_width() - self.width) // 2,
@@ -81,4 +86,40 @@ class TennisCourt:
             self.length,
         )
         pygame.draw.rect(screen, color, court_rect)
+
+        line_width = 3
+        center_y = court_rect.centery
+        top_service_y = court_rect.top + self.length // 4
+        bottom_service_y = court_rect.bottom - self.length // 4
+
+        # Perimetro, rete, linee di servizio e linea centrale di servizio.
+        pygame.draw.rect(screen, line_color, court_rect, line_width)
+        pygame.draw.line(
+            screen,
+            line_color,
+            (court_rect.left, center_y),
+            (court_rect.right, center_y),
+            line_width,
+        )
+        pygame.draw.line(
+            screen,
+            line_color,
+            (court_rect.left, top_service_y),
+            (court_rect.right, top_service_y),
+            line_width,
+        )
+        pygame.draw.line(
+            screen,
+            line_color,
+            (court_rect.left, bottom_service_y),
+            (court_rect.right, bottom_service_y),
+            line_width,
+        )
+        pygame.draw.line(
+            screen,
+            line_color,
+            (court_rect.centerx, top_service_y),
+            (court_rect.centerx, bottom_service_y),
+            line_width,
+        )
         return court_rect

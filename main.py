@@ -29,14 +29,21 @@ def main() -> None:
                 running = False
 
         screen.fill(config["colors"]["background"])
-        court_rect = court.draw_court(screen, config["colors"]["court"])
+        court_rect = court.draw_court(
+            screen,
+            colors["court"],
+            colors["lines"],
+        )
 
         p1.draw(screen)
         p2.draw(screen)
 
         p1.move([1,1], delta_time)
+        p2.move([-1,-1], delta_time)
         p1.draw(screen)
+        p2.draw(screen)
         p1.keep_inside(court_rect)
+        p2.keep_inside(court_rect)
 
         pygame.display.flip()
 

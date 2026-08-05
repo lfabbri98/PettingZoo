@@ -2,7 +2,7 @@
 window:
   width: 1000
   height: 650
-  title: "Tennis simulator — step 1"
+  title: "Tennis simulator"
   fps: 60
 
 court:
@@ -12,7 +12,7 @@ court:
 player:
   width: 55
   height: 18
-  speed: 100  # pixel al secondo
+  speed: 50  # pixel al secondo
   baseline_offset: 28
 
 colors:
