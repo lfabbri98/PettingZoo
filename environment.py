@@ -67,9 +67,6 @@ class TennisCourt:
 
     def __init__(self, court_config):
         self.width = court_config["width"]
-        # Nel file di configurazione la dimensione lunga è chiamata ``height``;
-        # nell'oggetto la esponiamo come ``length`` per distinguere chiaramente
-        # i due lati del campo.
         self.length = court_config["height"]
 
     def draw_court(self, screen: pygame.Surface, color: tuple[int, int, int] = (52, 122, 76)) -> pygame.Rect:

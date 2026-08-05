@@ -6,7 +6,7 @@ window:
   fps: 60
 
 court:
-  width: 100
+  width: 300
   height: 500
 
 player:
