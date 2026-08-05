@@ -12,7 +12,7 @@ court:
 player:
   width: 55
   height: 18
-  speed: 420  # pixel al secondo
+  speed: 100  # pixel al secondo
   baseline_offset: 28
 
 colors:

@@ -20,8 +20,10 @@ def main() -> None:
     p1 = env.Player(500, 103, colors["player_bottom"], player_config)
     p2 = env.Player(500, 547, colors["player_top"], player_config)
 
+    clock = pygame.time.Clock()
     running = True
     while running:
+        delta_time = clock.tick(config["window"]["fps"]) / 1000
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -31,6 +33,9 @@ def main() -> None:
 
         p1.draw(screen)
         p2.draw(screen)
+
+        p1.move([0,1], delta_time)
+        p1.draw(screen)
 
         pygame.display.flip()
 

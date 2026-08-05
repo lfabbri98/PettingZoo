@@ -33,14 +33,13 @@ class Player:
             self.height,
         )
 
-    def move(self, action: int, delta_time: float) -> None:
-        """Applica un'azione al giocatore. -1 Sinistra, 0 Fermo, +1 Destra
-            Si muove di x = v*t dove v = player speed e t il tempo di movimento
-        """
-        if action not in (-1, 0, 1):
-            raise ValueError(f"Azione non valida: {action}. Usa -1, 0 oppure 1.")
+    def move(self, direction: tuple, delta_time: float) -> None:
 
-        self.x += action * self.speed * delta_time
+        if direction[0] not in (-1, 0, 1) or direction[1] not in (-1, 0, 1):
+            raise ValueError(f"Azione non valida: {direction}. Usa -1, 0 oppure 1.")
+
+        self.x += direction[0] * self.speed * delta_time
+        self.y += direction[1] * self.speed * delta_time
 
     def draw(self, screen: pygame.Surface) -> None:
         pygame.draw.rect(screen, self.color, self.rect, border_radius=5)
