@@ -24,7 +24,7 @@ class Player:
     color: tuple[int, int, int]
     width: int #px
     height: int #px
-    speed: int #px/s
+    max_speed: int #px/s
     max_shot_angle: float
     vx: float
     vy: float
@@ -38,13 +38,20 @@ class Player:
             self.height,
         )
 
-    def move(self, direction: tuple, delta_time: float) -> None:
+    def move(self, direction: tuple[float, float], delta_time: float) -> None:
+        """Muove il giocatore secondo una direzione normalizzata.
 
-        if direction[0] not in (-1, 0, 1) or direction[1] not in (-1, 0, 1):
-            raise ValueError(f"Azione non valida: {direction}. Usa -1, 0 oppure 1.")
+        Ogni componente della direzione può variare tra -1 e 1. Il suo modulo
+        non può superare 1, così la velocità risultante non supera
+        ``max_speed``.
+        """
+        if len(direction) != 2 or math.hypot(*direction) > 1:
+            raise ValueError(
+                f"Azione non valida: {direction}. Il modulo deve essere al massimo 1."
+            )
 
-        self.vx = direction[0] * self.speed
-        self.vy = direction[1] * self.speed
+        self.vx = direction[0] * self.max_speed
+        self.vy = direction[1] * self.max_speed
         self.x += self.vx * delta_time
         self.y += self.vy * delta_time
 
@@ -95,7 +102,7 @@ class Player:
 
         self.width = player_config["width"]
         self.height = player_config["height"]
-        self.speed = player_config["speed"]
+        self.max_speed = player_config["max_speed"]
         self.max_shot_angle = player_config.get("max_shot_angle", 89)
         if not 0 < self.max_shot_angle <= 89:
             raise ValueError("max_shot_angle deve essere compreso tra 0 e 89 gradi.")
