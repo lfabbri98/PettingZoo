@@ -212,6 +212,15 @@ class Ball:
         return True
 
 
+def player_is_behind_ball(player: Player, ball: Ball, side: str) -> bool:
+    """Restituisce se il giocatore è nella posizione corretta per colpire."""
+    if side == "top":
+        return player.y <= ball.y
+    if side == "bottom":
+        return player.y >= ball.y
+    raise ValueError(f"Lato giocatore non valido: {side}")
+
+
 class TennisCourt:
 
     """Definizione del campo da gioco"""
