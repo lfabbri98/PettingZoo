@@ -1,11 +1,11 @@
 import pygame
 import pytest
 
-from environment import Ball, Player, TennisCourt
-from main import demo_shot_choice, direction_towards_ball, player_is_behind_ball
+from environment import Ball, Player, TennisCourt, player_is_behind_ball
+from main import demo_shot_choice, direction_towards_ball
 
 
-PLAYER_CONFIG = {"width": 20, "height": 10, "speed": 50}
+PLAYER_CONFIG = {"width": 20, "height": 10, "max_speed": 50}
 
 
 def make_player(x: float = 50, y: float = 50) -> Player:
@@ -15,15 +15,20 @@ def make_player(x: float = 50, y: float = 50) -> Player:
 def test_player_move_updates_position_and_velocity() -> None:
     player = make_player()
 
-    player.move((1, -1), 0.2)
+    player.move((0.5, 0), 0.2)
 
-    assert (player.x, player.y) == (60, 40)
-    assert (player.vx, player.vy) == (50, -50)
+    assert (player.x, player.y) == (55, 50)
+    assert (player.vx, player.vy) == (25, 0)
+
+
+def test_player_cannot_exceed_configured_max_speed() -> None:
+    with pytest.raises(ValueError):
+        make_player().move((1, 1), 0.1)
 
 
 def test_player_reset_restores_initial_position_and_stops_movement() -> None:
     player = make_player(x=30, y=70)
-    player.move((1, -1), 0.2)
+    player.move((0.5, -0.5), 0.2)
 
     player.reset()
 
