@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import pygame
 import yaml
 from pathlib import Path
+import random
 
 def parse_parameters(config_name: str) -> dict:
     #Parsing parametri necessari. Ritorna un dizionario con dentro config
@@ -88,7 +89,7 @@ class Ball:
         self.y += self.vy * delta_time
 
     def keep_inside(self, bounds: pygame.Rect) -> None:
-        """Mantiene la pallina nel campo e inverte la velocità all'impatto."""
+        """Fa rimbalzare la pallina sui bordi laterali del campo."""
         if self.x <= bounds.left:
             self.x = bounds.left
             self.vx = abs(self.vx)
@@ -96,12 +97,21 @@ class Ball:
             self.x = bounds.right
             self.vx = -abs(self.vx)
 
-        if self.y <= bounds.top:
-            self.y = bounds.top
-            self.vy = abs(self.vy)
-        elif self.y >= bounds.bottom:
-            self.y = bounds.bottom
-            self.vy = -abs(self.vy)
+    def check_point(self, bounds: pygame.Rect) -> str | None:
+        """Restituisce il giocatore che segna se la pallina supera il fondo campo."""
+        if self.y < bounds.top:
+            return "bottom"
+        if self.y > bounds.bottom:
+            return "top"
+        return None
+
+    def reset(self, bounds: pygame.Rect) -> None:
+        """Rimette la pallina al centro con una nuova velocità casuale."""
+        self.x = bounds.centerx
+        self.y = bounds.centery
+        self.vx = random.choice((-1, 1)) * random.randint(80, 160)
+        self.vy = random.choice((-1, 1)) * random.randint(80, 160)
+        self._players_in_contact.clear()
 
     def hit_by(self, player: Player) -> bool:
         """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
@@ -129,10 +139,23 @@ class TennisCourt:
 
     width: int
     length: int
+    top_score: int
+    bottom_score: int
 
     def __init__(self, court_config):
         self.width = court_config["width"]
         self.length = court_config["height"]
+        self.top_score = 0
+        self.bottom_score = 0
+
+    def add_point(self, scorer: str) -> None:
+        """Assegna un punto al giocatore indicato."""
+        if scorer == "top":
+            self.top_score += 1
+        elif scorer == "bottom":
+            self.bottom_score += 1
+        else:
+            raise ValueError(f"Giocatore non valido: {scorer}")
 
     def draw_court(
         self,
