@@ -53,6 +53,15 @@ class Player:
         self.x = max(bounds.left + self.width/2, min(self.x, bounds.right-self.width/2))
         self.y = max(bounds.top + self.height / 2, min(self.y, bounds.bottom - self.height / 2))
 
+    def keep_in_half(self, bounds: pygame.Rect, side: str) -> None:
+        """Mantiene il giocatore nella metà alta o bassa del campo."""
+        self.keep_inside(bounds)
+
+        if side == "top":
+            self.y = min(self.y, bounds.centery - self.height / 2)
+        elif side == "bottom":
+            self.y = max(self.y, bounds.centery + self.height / 2)
+
     def __init__(self, x, y, color, player_config):
         """
         Nel costruttore inizializzo i parametri propri del giocatore
