@@ -2,6 +2,7 @@ import pygame
 import pytest
 
 from environment import Ball, Player, TennisCourt
+from main import demo_shot_choice, direction_towards_ball, player_is_behind_ball
 
 
 PLAYER_CONFIG = {"width": 20, "height": 10, "speed": 50}
@@ -18,6 +19,16 @@ def test_player_move_updates_position_and_velocity() -> None:
 
     assert (player.x, player.y) == (60, 40)
     assert (player.vx, player.vy) == (50, -50)
+
+
+def test_player_reset_restores_initial_position_and_stops_movement() -> None:
+    player = make_player(x=30, y=70)
+    player.move((1, -1), 0.2)
+
+    player.reset()
+
+    assert (player.x, player.y) == (30, 70)
+    assert (player.vx, player.vy) == (0, 0)
 
 
 def test_player_stays_inside_the_court() -> None:
@@ -52,6 +63,36 @@ def test_player_with_unknown_side_stays_inside_the_court() -> None:
     player.keep_in_half(pygame.Rect(0, 0, 100, 100), "unknown")
 
     assert player.y == 95
+
+
+def test_demo_shot_choice_clamps_angle_to_supported_range() -> None:
+    player = Player(
+        50,
+        80,
+        (0, 0, 0),
+        {**PLAYER_CONFIG, "max_shot_angle": 35},
+    )
+    ball = Ball(x=50, y=15, vx=0, vy=0)
+
+    force, angle = demo_shot_choice(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+
+    assert force == 80
+    assert angle == -35
+
+
+def test_player_uses_configured_maximum_shot_angle() -> None:
+    player = Player(
+        50,
+        50,
+        (0, 0, 0),
+        {**PLAYER_CONFIG, "max_shot_angle": 35},
+    )
+
+    player.choose_shot(force=100, angle=35)
+
+    assert player.shot_angle == 35
+    with pytest.raises(ValueError):
+        player.choose_shot(force=100, angle=36)
 
 
 def test_ball_move_updates_position() -> None:
@@ -92,6 +133,17 @@ def test_ball_check_point_detects_the_opponent_of_the_exit_side(
     assert ball.check_point(pygame.Rect(0, 0, 100, 100)) == scorer
 
 
+def test_demo_policy_chases_ball_behind_bottom_player_without_hitting_it() -> None:
+    bottom_player = make_player(x=50, y=80)
+    ball = Ball(x=50, y=75, vx=0, vy=50)
+
+    ball.move(0.14)
+
+    assert ball.y > bottom_player.y
+    assert direction_towards_ball(bottom_player, ball) == (0, 1)
+    assert player_is_behind_ball(bottom_player, ball, "bottom") is False
+
+
 def test_ball_reset_centers_ball_and_gives_it_a_new_velocity() -> None:
     ball = Ball(0, 0, 0, 0)
     ball.reset(pygame.Rect(0, 0, 100, 80))
@@ -99,6 +151,17 @@ def test_ball_reset_centers_ball_and_gives_it_a_new_velocity() -> None:
     assert (ball.x, ball.y) == (50, 40)
     assert 80 <= abs(ball.vx) <= 160
     assert 80 <= abs(ball.vy) <= 160
+
+
+def test_ball_speed_is_limited_after_a_hit() -> None:
+    player = make_player()
+    player.choose_shot(force=100, angle=0)
+    ball = Ball(player.x, player.y, 0, 250, max_speed=300)
+
+    assert ball.hit_by(player) is True
+
+    assert ball.vx == 0
+    assert ball.vy == -300
 
 
 def test_court_add_point_updates_the_correct_score() -> None:
@@ -120,6 +183,28 @@ def test_ball_hit_adds_horizontal_player_velocity_and_reverses_vertical_velocity
 
     assert hit is True
     assert (ball.vx, ball.vy) == (62, -25)
+
+
+def test_player_shot_force_and_angle_deviate_ball_trajectory() -> None:
+    player = make_player()
+    player.move((1, 0), 0.1)
+    player.choose_shot(force=100, angle=30)
+    ball = Ball(player.x, player.y, 12, 25)
+
+    hit = ball.hit_by(player)
+
+    assert hit is True
+    assert ball.vx == pytest.approx(112)
+    assert ball.vy == pytest.approx(-(25 + 100 * 3**0.5 / 2))
+
+
+@pytest.mark.parametrize(
+    ("force", "angle"),
+    [(-1, 0), (10, -90), (10, 90)],
+)
+def test_player_rejects_invalid_shot_choices(force: float, angle: float) -> None:
+    with pytest.raises(ValueError):
+        make_player().choose_shot(force, angle)
 
 
 def test_ball_is_hit_only_once_while_inside_the_same_player() -> None:

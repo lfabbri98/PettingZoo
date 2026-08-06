@@ -3,6 +3,7 @@ Definizione di ambiente e regole del simulatore
 """
 
 from dataclasses import dataclass
+import math
 import pygame
 import yaml
 from pathlib import Path
@@ -24,6 +25,7 @@ class Player:
     width: int #px
     height: int #px
     speed: int #px/s
+    max_shot_angle: float
     vx: float
     vy: float
 
@@ -45,6 +47,30 @@ class Player:
         self.vy = direction[1] * self.speed
         self.x += self.vx * delta_time
         self.y += self.vy * delta_time
+
+    def reset(self) -> None:
+        """Riporta il giocatore alla posizione iniziale e ne azzera il movimento."""
+        self.x = self.initial_x
+        self.y = self.initial_y
+        self.vx = 0
+        self.vy = 0
+
+    def choose_shot(self, force: float, angle: float) -> None:
+        """Imposta il prossimo colpo.
+
+        ``force`` è espressa in pixel al secondo; ``angle`` è espresso in gradi,
+        con 0° per un colpo dritto e valori positivi verso destra.
+        """
+        if force < 0:
+            raise ValueError("La forza del colpo non può essere negativa.")
+        if not -self.max_shot_angle <= angle <= self.max_shot_angle:
+            raise ValueError(
+                "L'angolo del colpo deve essere compreso tra "
+                f"-{self.max_shot_angle} e {self.max_shot_angle} gradi."
+            )
+
+        self.shot_force = force
+        self.shot_angle = angle
 
     def draw(self, screen: pygame.Surface) -> None:
         pygame.draw.rect(screen, self.color, self.rect, border_radius=5)
@@ -70,11 +96,18 @@ class Player:
         self.width = player_config["width"]
         self.height = player_config["height"]
         self.speed = player_config["speed"]
+        self.max_shot_angle = player_config.get("max_shot_angle", 89)
+        if not 0 < self.max_shot_angle <= 89:
+            raise ValueError("max_shot_angle deve essere compreso tra 0 e 89 gradi.")
         self.x = x
         self.y = y
+        self.initial_x = x
+        self.initial_y = y
         self.color = color
         self.vx = 0
         self.vy = 0
+        self.shot_force = 0
+        self.shot_angle = 0
 
 
 class Ball:
@@ -84,13 +117,35 @@ class Ball:
     y: float
     vx: float
     vy: float
+    max_speed: float | None
 
-    def __init__(self, x: float, y: float, vx: float, vy: float):
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        vx: float,
+        vy: float,
+        max_speed: float | None = None,
+    ):
+        if max_speed is not None and max_speed <= 0:
+            raise ValueError("La velocità massima della pallina deve essere positiva.")
         self.x = x
         self.y = y
         self.vx = vx
         self.vy = vy
+        self.max_speed = max_speed
         self._players_in_contact: set[int] = set()
+
+    def limit_speed(self) -> None:
+        """Limita il modulo della velocità della pallina, se configurato."""
+        if self.max_speed is None:
+            return
+
+        speed = math.hypot(self.vx, self.vy)
+        if speed > self.max_speed:
+            scale = self.max_speed / speed
+            self.vx *= scale
+            self.vy *= scale
 
     def move(self, delta_time: float) -> None:
         """Aggiorna la posizione della pallina in base alla sua velocità."""
@@ -120,13 +175,15 @@ class Ball:
         self.y = bounds.centery
         self.vx = random.choice((-1, 1)) * random.randint(80, 160)
         self.vy = random.choice((-1, 1)) * random.randint(80, 160)
+        self.limit_speed()
         self._players_in_contact.clear()
 
     def hit_by(self, player: Player) -> bool:
         """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
 
-        La componente orizzontale della pallina riceve la velocità orizzontale
-        del giocatore, mentre quella verticale cambia sempre verso.
+        La forza scelta dal giocatore viene trasformata in un vettore secondo
+        l'angolo scelto e sommata alla sua velocità. La componente verticale
+        della pallina viene sempre rivolta verso l'altra metà campo.
         """
         player_id = id(player)
         if not player.rect.collidepoint(round(self.x), round(self.y)):
@@ -136,8 +193,14 @@ class Ball:
         if player_id in self._players_in_contact:
             return False
 
-        self.vx += player.vx
-        self.vy = -self.vy
+        angle_radians = math.radians(player.shot_angle)
+        shot_vx = player.shot_force * math.sin(angle_radians)
+        shot_vy = player.shot_force * math.cos(angle_radians)
+        outgoing_direction = -1 if self.vy > 0 else 1
+
+        self.vx += player.vx + shot_vx
+        self.vy = outgoing_direction * (abs(self.vy) + shot_vy) + player.vy
+        self.limit_speed()
         self._players_in_contact.add(player_id)
         return True
 

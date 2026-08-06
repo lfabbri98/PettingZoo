@@ -9,11 +9,14 @@ court:
   width: 300
   height: 500
 
+ball:
+  max_speed: 350  # pixel al secondo
+
 player:
   width: 55
   height: 18
-  speed: 50  # pixel al secondo
-  baseline_offset: 28
+  speed: 200  # pixel al secondo
+  max_shot_angle: 35  # gradi rispetto al colpo dritto
 
 colors:
   court: [52, 122, 76]
