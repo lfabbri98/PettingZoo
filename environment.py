@@ -61,6 +61,42 @@ class Player:
         self.color = color
 
 
+class Ball:
+    """Pallina, descritta dalla posizione e dalle componenti della velocità."""
+
+    x: float
+    y: float
+    vx: float
+    vy: float
+
+    def __init__(self, x: float, y: float, vx: float, vy: float):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+
+    def move(self, delta_time: float) -> None:
+        """Aggiorna la posizione della pallina in base alla sua velocità."""
+        self.x += self.vx * delta_time
+        self.y += self.vy * delta_time
+
+    def keep_inside(self, bounds: pygame.Rect) -> None:
+        """Mantiene la pallina nel campo e inverte la velocità all'impatto."""
+        if self.x <= bounds.left:
+            self.x = bounds.left
+            self.vx = abs(self.vx)
+        elif self.x >= bounds.right:
+            self.x = bounds.right
+            self.vx = -abs(self.vx)
+
+        if self.y <= bounds.top:
+            self.y = bounds.top
+            self.vy = abs(self.vy)
+        elif self.y >= bounds.bottom:
+            self.y = bounds.bottom
+            self.vy = -abs(self.vy)
+
+
 class TennisCourt:
 
     """Definizione del campo da gioco"""
