@@ -23,6 +23,8 @@ class Player:
     width: int #px
     height: int #px
     speed: int #px/s
+    vx: float
+    vy: float
 
     @property 
     def rect(self) -> pygame.Rect:
@@ -38,8 +40,10 @@ class Player:
         if direction[0] not in (-1, 0, 1) or direction[1] not in (-1, 0, 1):
             raise ValueError(f"Azione non valida: {direction}. Usa -1, 0 oppure 1.")
 
-        self.x += direction[0] * self.speed * delta_time
-        self.y += direction[1] * self.speed * delta_time
+        self.vx = direction[0] * self.speed
+        self.vy = direction[1] * self.speed
+        self.x += self.vx * delta_time
+        self.y += self.vy * delta_time
 
     def draw(self, screen: pygame.Surface) -> None:
         pygame.draw.rect(screen, self.color, self.rect, border_radius=5)
@@ -59,6 +63,8 @@ class Player:
         self.x = x
         self.y = y
         self.color = color
+        self.vx = 0
+        self.vy = 0
 
 
 class Ball:
@@ -74,6 +80,7 @@ class Ball:
         self.y = y
         self.vx = vx
         self.vy = vy
+        self._players_in_contact: set[int] = set()
 
     def move(self, delta_time: float) -> None:
         """Aggiorna la posizione della pallina in base alla sua velocità."""
@@ -95,6 +102,25 @@ class Ball:
         elif self.y >= bounds.bottom:
             self.y = bounds.bottom
             self.vy = -abs(self.vy)
+
+    def hit_by(self, player: Player) -> bool:
+        """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
+
+        La componente orizzontale della pallina riceve la velocità orizzontale
+        del giocatore, mentre quella verticale cambia sempre verso.
+        """
+        player_id = id(player)
+        if not player.rect.collidepoint(round(self.x), round(self.y)):
+            self._players_in_contact.discard(player_id)
+            return False
+
+        if player_id in self._players_in_contact:
+            return False
+
+        self.vx += player.vx
+        self.vy = -self.vy
+        self._players_in_contact.add(player_id)
+        return True
 
 
 class TennisCourt:
