@@ -44,9 +44,19 @@ class Player:
         non può superare 1, così la velocità risultante non supera
         ``max_speed``.
         """
-        if len(direction) != 2 or math.hypot(*direction) > 1:
+        if len(direction) != 2:
             raise ValueError(
                 f"Azione non valida: {direction}. Il modulo deve essere al massimo 1."
+            )
+        direction_length = math.hypot(*direction)
+        if direction_length > 1 + 1e-9:
+            raise ValueError(
+                f"Azione non valida: {direction}. Il modulo deve essere al massimo 1."
+            )
+        if direction_length > 1:
+            direction = (
+                direction[0] / direction_length,
+                direction[1] / direction_length,
             )
 
         self.vx = direction[0] * self.max_speed
@@ -195,8 +205,8 @@ class Ball:
         """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
 
         La forza scelta dal giocatore viene trasformata in un vettore secondo
-        l'angolo scelto e sommata alla sua velocità. La componente verticale
-        della pallina viene sempre rivolta verso l'altra metà campo.
+        l'angolo scelto. La componente verticale della pallina viene sempre
+        rivolta verso l'altra metà campo.
         """
         player_id = id(player)
         if not player.rect.collidepoint(round(self.x), round(self.y)):
@@ -214,9 +224,21 @@ class Ball:
         outgoing_direction = (
             1 if side == "top" else -1 if side == "bottom" else -1 if self.vy > 0 else 1
         )
-
-        self.vx += player.vx + shot_vx
-        self.vy = outgoing_direction * (abs(self.vy) + shot_vy) + player.vy
+        is_baseline_chase = (
+            side == "top" and self.vy < 0 and player.vy < 0
+        ) or (
+            side == "bottom" and self.vy > 0 and player.vy > 0
+        )
+        if is_baseline_chase:
+            # Il giocatore ha recuperato una palla che scappava verso il fondo:
+            # la rimanda dritta nell'altra metà campo, senza deriva laterale.
+            self.vx = 0
+            self.vy = outgoing_direction * (abs(self.vy) + shot_vy)
+        else:
+            # Il nuovo colpo determina interamente la direzione laterale della
+            # palla: non conserva la velocità orizzontale precedente.
+            self.vx = shot_vx
+            self.vy = outgoing_direction * (abs(self.vy) + shot_vy) + player.vy
         self.limit_speed()
         self._players_in_contact.add(player_id)
         return True
