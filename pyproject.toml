@@ -1,10 +1,22 @@
 [project]
-name = "pettingzoo"
+name = "tennis-rl-simulator"
 version = "0.1.0"
-description = "Add your description here"
+description = "Simulatore di tennis headless per reinforcement learning"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pygame>=2.6.1",
     "pyyaml>=6.0.2",
 ]
+
+[project.optional-dependencies]
+render = [
+    "pygame>=2.6.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

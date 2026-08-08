@@ -1,9 +1,18 @@
 import math
+from copy import deepcopy
 
 import pytest
 import rl
 
-from environment import Ball, BoundingBox, Player, TennisCourt, player_is_behind_ball
+from environment import (
+    Ball,
+    BoundingBox,
+    Player,
+    TennisCourt,
+    parse_parameters,
+    player_is_behind_ball,
+    validate_parameters,
+)
 from rl import classic_policy, observation
 
 
@@ -73,12 +82,11 @@ def test_player_cannot_cross_the_net(
     assert player.y == expected_y
 
 
-def test_player_with_unknown_side_stays_inside_the_court() -> None:
+def test_player_rejects_unknown_court_side() -> None:
     player = make_player(y=200)
 
-    player.keep_in_half(COURT_BOUNDS, "unknown")
-
-    assert player.y == 95
+    with pytest.raises(ValueError, match="Lato"):
+        player.keep_in_half(COURT_BOUNDS, "unknown")
 
 
 def test_player_uses_configured_maximum_shot_angle() -> None:
@@ -185,7 +193,7 @@ def test_baseline_chase_returns_ball_straight_to_the_other_half() -> None:
     ball = Ball(player.x, player.y, 30, 40)
 
     assert ball.hit_by(player, "bottom") is True
-    assert (ball.vx, ball.vy) == (0, -130)
+    assert (ball.vx, ball.vy) == (0, -80)
 
 
 def test_ball_reset_places_ball_on_the_randomly_selected_server() -> None:
@@ -203,7 +211,7 @@ def test_ball_reset_places_ball_on_the_randomly_selected_server() -> None:
 
 def test_ball_speed_is_limited_after_a_hit() -> None:
     player = make_player()
-    player.choose_shot(force=100, angle=0)
+    player.choose_shot(force=400, angle=0)
     ball = Ball(player.x, player.y, 0, 250, max_speed=300)
 
     assert ball.hit_by(player) is True
@@ -250,12 +258,13 @@ def test_court_reset_score_zeroes_out_scores() -> None:
 def test_ball_hit_replaces_horizontal_velocity_with_shot_component() -> None:
     player = make_player()
     player.move((1, 0), 0.1)
+    player.choose_shot(force=50, angle=0)
     ball = Ball(player.x, player.y, 12, 25)
 
     hit = ball.hit_by(player)
 
     assert hit is True
-    assert (ball.vx, ball.vy) == pytest.approx((0, -(12**2 + 25**2) ** 0.5))
+    assert (ball.vx, ball.vy) == pytest.approx((0, -50))
 
 
 def test_player_shot_force_and_angle_deviate_ball_trajectory() -> None:
@@ -267,7 +276,7 @@ def test_player_shot_force_and_angle_deviate_ball_trajectory() -> None:
     hit = ball.hit_by(player)
 
     assert hit is True
-    outgoing_speed = (12**2 + 25**2) ** 0.5 + 100
+    outgoing_speed = 100
     assert ball.vx == pytest.approx(outgoing_speed / 2)
     assert ball.vy == pytest.approx(-outgoing_speed * 3**0.5 / 2)
 
@@ -284,18 +293,20 @@ def test_player_rejects_invalid_shot_choices(force: float, angle: float) -> None
 def test_ball_is_hit_only_once_while_inside_the_same_player() -> None:
     player = make_player()
     player.move((1, 0), 0.1)
+    player.choose_shot(force=60, angle=0)
     ball = Ball(player.x, player.y, 12, 25)
 
     ball.hit_by(player)
     second_hit = ball.hit_by(player)
 
     assert second_hit is False
-    assert (ball.vx, ball.vy) == pytest.approx((0, -(12**2 + 25**2) ** 0.5))
+    assert (ball.vx, ball.vy) == pytest.approx((0, -60))
 
 
 def test_ball_can_be_hit_again_after_leaving_player_box() -> None:
     player = make_player()
     player.move((1, 0), 0.1)
+    player.choose_shot(force=60, angle=0)
     ball = Ball(player.x, player.y, 12, 25)
 
     assert ball.hit_by(player) is True
@@ -303,7 +314,7 @@ def test_ball_can_be_hit_again_after_leaving_player_box() -> None:
     assert ball.hit_by(player) is False
     ball.x = player.x
     assert ball.hit_by(player) is True
-    assert (ball.vx, ball.vy) == pytest.approx((0, (12**2 + 25**2) ** 0.5))
+    assert (ball.vx, ball.vy) == pytest.approx((0, 60))
 
 
 def test_observation_is_normalized_from_bottom_agent_perspective() -> None:
@@ -316,7 +327,23 @@ def test_observation_is_normalized_from_bottom_agent_perspective() -> None:
     state = observation(agent, opponent, ball, COURT_BOUNDS, "bottom")
 
     assert state == pytest.approx(
-        (0.25, 0.8, 0.5, -0.5, 0.75, 0.2, -0.5, 0.5, 0.4, 0.6, 0.25, -0.5)
+        (
+            0.25,
+            0.8,
+            0.5,
+            -0.5,
+            0.75,
+            0.2,
+            -0.5,
+            0.5,
+            0.4,
+            0.6,
+            0.25,
+            -0.5,
+            0,
+            0,
+            0,
+        )
     )
 
 
@@ -330,8 +357,73 @@ def test_observation_mirrors_vertical_axis_for_top_agent() -> None:
     state = observation(agent, opponent, ball, COURT_BOUNDS, "top")
 
     assert state == pytest.approx(
-        (0.25, 0.8, 0.5, -0.5, 0.75, 0.2, -0.5, 0.5, 0.4, 0.6, 0.25, -0.5)
+        (
+            0.25,
+            0.8,
+            0.5,
+            -0.5,
+            0.75,
+            0.2,
+            -0.5,
+            0.5,
+            0.4,
+            0.6,
+            0.25,
+            -0.5,
+            0,
+            0,
+            0,
+        )
     )
+
+
+def test_observation_contains_match_state_from_agent_perspective() -> None:
+    agent = make_player(x=50, y=80)
+    opponent = make_player(x=50, y=20)
+    ball = Ball(50, 50, 0, 0, max_speed=100)
+
+    state = observation(
+        agent,
+        opponent,
+        ball,
+        COURT_BOUNDS,
+        "bottom",
+        agent_score=7,
+        opponent_score=3,
+        points_to_win=11,
+        active_side="bottom",
+    )
+
+    assert state[-3:] == pytest.approx((7 / 11, 3 / 11, 1))
+
+
+def test_desired_shot_speed_does_not_depend_on_incoming_speed() -> None:
+    player = make_player()
+    player.choose_shot(force=120, angle=0)
+    slow_ball = Ball(player.x, player.y, 0, 10)
+    fast_ball = Ball(player.x, player.y, 0, 200)
+
+    assert slow_ball.hit_by(player, "bottom") is True
+    assert fast_ball.hit_by(player, "bottom") is True
+
+    assert math.hypot(slow_ball.vx, slow_ball.vy) == pytest.approx(120)
+    assert math.hypot(fast_ball.vx, fast_ball.vy) == pytest.approx(120)
+
+
+def test_configuration_rejects_invalid_physical_values() -> None:
+    config = deepcopy(parse_parameters("parameters.yml"))
+    config["window"]["fps"] = 0
+
+    with pytest.raises(ValueError, match="window.fps"):
+        validate_parameters(config)
+
+
+def test_configuration_rejects_shot_speed_interval_without_range() -> None:
+    config = deepcopy(parse_parameters("parameters.yml"))
+    config["ball"]["min_shot_speed"] = config["ball"]["max_speed"]
+
+    with pytest.raises(ValueError, match="min_shot_speed"):
+        validate_parameters(config)
 
 
 def test_classic_policy_returns_a_valid_move_and_shot(
@@ -371,8 +463,8 @@ def test_random_policy_angle_changes_the_ball_trajectory(
     player.choose_shot(action.shot_force, action.shot_angle)
 
     assert ball.hit_by(player, "bottom") is True
-    assert ball.vx == pytest.approx(52.5)
-    assert ball.vy == pytest.approx(-105 * 3**0.5 / 2)
+    assert ball.vx == pytest.approx(40)
+    assert ball.vy == pytest.approx(-80 * 3**0.5 / 2)
 
 
 def test_classic_policy_varies_the_serve_choice(monkeypatch: pytest.MonkeyPatch) -> None:

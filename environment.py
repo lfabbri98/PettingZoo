@@ -3,10 +3,16 @@ Definizione di ambiente e regole del simulatore
 """
 
 import math
-import yaml
-from pathlib import Path
 import random
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+Config = dict[str, Any]
+
 
 @dataclass
 class BoundingBox:
@@ -35,12 +41,79 @@ class BoundingBox:
         return self.left <= px <= self.right and self.top <= py <= self.bottom
 
 
-def parse_parameters(config_name: str) -> dict:
-    #Parsing parametri necessari. Ritorna un dizionario con dentro config
-    with open(config_name, "r") as f:
-        config = yaml.safe_load(f)
+def _positive_number(config: Config, section: str, key: str) -> float:
+    try:
+        value = config[section][key]
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"Parametro mancante: {section}.{key}") from error
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise ValueError(f"{section}.{key} deve essere un numero positivo.")
+    return float(value)
+
+
+def validate_parameters(config: object) -> Config:
+    """Valida la configurazione prima di costruire il simulatore."""
+    if not isinstance(config, dict):
+        raise ValueError("La configurazione deve essere un dizionario YAML.")
+
+    for section in ("window", "court", "ball", "player", "colors"):
+        if not isinstance(config.get(section), dict):
+            raise ValueError(
+                f"Sezione di configurazione mancante o non valida: {section}"
+            )
+
+    window_width = _positive_number(config, "window", "width")
+    window_height = _positive_number(config, "window", "height")
+    _positive_number(config, "window", "fps")
+    if not isinstance(config["window"].get("title"), str):
+        raise ValueError("window.title deve essere una stringa.")
+
+    court_width = _positive_number(config, "court", "width")
+    court_height = _positive_number(config, "court", "height")
+    if court_width > window_width or court_height > window_height:
+        raise ValueError("Il campo deve essere contenuto nella finestra.")
+
+    max_ball_speed = _positive_number(config, "ball", "max_speed")
+    min_shot_speed = _positive_number(config, "ball", "min_shot_speed")
+    if min_shot_speed >= max_ball_speed:
+        raise ValueError("ball.min_shot_speed deve essere inferiore a ball.max_speed.")
+
+    player_width = _positive_number(config, "player", "width")
+    player_height = _positive_number(config, "player", "height")
+    _positive_number(config, "player", "max_speed")
+    max_shot_angle = _positive_number(config, "player", "max_shot_angle")
+    if max_shot_angle > 89:
+        raise ValueError("player.max_shot_angle deve essere al massimo 89 gradi.")
+    if player_width > court_width or player_height * 2 > court_height:
+        raise ValueError(
+            "Le dimensioni dei giocatori non sono compatibili con il campo."
+        )
+
+    for name in ("court", "lines", "player_top", "player_bottom", "background"):
+        color = config["colors"].get(name)
+        if (
+            not isinstance(color, list)
+            or len(color) != 3
+            or any(
+                isinstance(channel, bool)
+                or not isinstance(channel, int)
+                or not 0 <= channel <= 255
+                for channel in color
+            )
+        ):
+            raise ValueError(
+                f"colors.{name} deve contenere tre interi compresi tra 0 e 255."
+            )
 
     return config
+
+
+def parse_parameters(config_name: str | Path) -> Config:
+    """Carica e valida i parametri YAML del simulatore."""
+    with Path(config_name).open("r", encoding="utf-8") as config_file:
+        config = yaml.safe_load(config_file)
+    return validate_parameters(config)
+
 
 class Player:
     """Definizione del giocatore"""
@@ -48,14 +121,14 @@ class Player:
     x: float
     y: float
     color: tuple[int, int, int]
-    width: int #px
-    height: int #px
-    max_speed: int #px/s
+    width: int  # px
+    height: int  # px
+    max_speed: int  # px/s
     max_shot_angle: float
     vx: float
     vy: float
 
-    @property 
+    @property
     def rect(self) -> BoundingBox:
         return BoundingBox(
             self.x - self.width / 2,
@@ -101,8 +174,9 @@ class Player:
     def choose_shot(self, force: float, angle: float) -> None:
         """Imposta il prossimo colpo.
 
-        ``force`` è espressa in pixel al secondo; ``angle`` è espresso in gradi,
-        con 0° per un colpo dritto e valori positivi verso destra.
+        ``force`` è la velocità d'uscita desiderata, espressa in pixel al
+        secondo. ``angle`` è espresso in gradi, con 0° per un colpo dritto e
+        valori positivi verso destra.
         """
         if force < 0:
             raise ValueError("La forza del colpo non può essere negativa.")
@@ -116,11 +190,19 @@ class Player:
         self.shot_angle = angle
 
     def keep_inside(self, bounds: BoundingBox) -> None:
-        self.x = max(bounds.left + self.width/2, min(self.x, bounds.right-self.width/2))
-        self.y = max(bounds.top + self.height / 2, min(self.y, bounds.bottom - self.height / 2))
+        self.x = max(
+            bounds.left + self.width / 2,
+            min(self.x, bounds.right - self.width / 2),
+        )
+        self.y = max(
+            bounds.top + self.height / 2,
+            min(self.y, bounds.bottom - self.height / 2),
+        )
 
     def keep_in_half(self, bounds: BoundingBox, side: str) -> None:
         """Mantiene il giocatore nella metà alta o bassa del campo."""
+        if side not in ("top", "bottom"):
+            raise ValueError(f"Lato giocatore non valido: {side}")
         self.keep_inside(bounds)
 
         if side == "top":
@@ -136,6 +218,10 @@ class Player:
         self.width = player_config["width"]
         self.height = player_config["height"]
         self.max_speed = player_config["max_speed"]
+        if self.width <= 0 or self.height <= 0 or self.max_speed <= 0:
+            raise ValueError(
+                "Dimensioni e velocità del giocatore devono essere positive."
+            )
         self.max_shot_angle = player_config.get("max_shot_angle", 89)
         if not 0 < self.max_shot_angle <= 89:
             raise ValueError("max_shot_angle deve essere compreso tra 0 e 89 gradi.")
@@ -234,10 +320,9 @@ class Ball:
     def hit_by(self, player: Player, side: str | None = None) -> bool:
         """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
 
-        La velocità in arrivo e la forza scelta dal giocatore determinano il
-        modulo della nuova velocità. L'angolo scelto ne determina entrambe le
-        componenti, mentre il lato del giocatore orienta la pallina verso
-        l'altra metà campo.
+        La forza scelta dal giocatore è la velocità d'uscita desiderata.
+        L'angolo ne determina le componenti, mentre il lato del giocatore
+        orienta la pallina verso l'altra metà campo.
         """
         player_id = id(player)
         if not player.rect.collidepoint(self.x, self.y):
@@ -250,10 +335,13 @@ class Ball:
         angle_radians = math.radians(player.shot_angle)
         if side is not None and side not in ("top", "bottom"):
             raise ValueError(f"Lato giocatore non valido: {side}")
-        outgoing_direction = (
-            1 if side == "top" else -1 if side == "bottom" else -1 if self.vy > 0 else 1
-        )
-        outgoing_speed = math.hypot(self.vx, self.vy) + player.shot_force
+        if side == "top":
+            outgoing_direction = 1
+        elif side == "bottom":
+            outgoing_direction = -1
+        else:
+            outgoing_direction = -1 if self.vy > 0 else 1
+        outgoing_speed = player.shot_force
         self.vx = outgoing_speed * math.sin(angle_radians)
         self.vy = outgoing_direction * outgoing_speed * math.cos(angle_radians)
         self.limit_speed()
@@ -271,7 +359,6 @@ def player_is_behind_ball(player: Player, ball: Ball, side: str) -> bool:
 
 
 class TennisCourt:
-
     """Definizione del campo da gioco"""
 
     width: float

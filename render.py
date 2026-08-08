@@ -1,7 +1,13 @@
 import pygame
-from environment import TennisCourt, Player, Ball
+from environment import Ball, Player, TennisCourt
 
-def draw_court(screen: pygame.Surface, court: TennisCourt, color: tuple[int, int, int], line_color: tuple[int, int, int]) -> None:
+
+def draw_court(
+    screen: pygame.Surface,
+    court: TennisCourt,
+    color: tuple[int, int, int],
+    line_color: tuple[int, int, int],
+) -> None:
     court_rect = pygame.Rect(
         round(court.x),
         round(court.y),
@@ -46,6 +52,7 @@ def draw_court(screen: pygame.Surface, court: TennisCourt, color: tuple[int, int
         line_width,
     )
 
+
 def draw_player(screen: pygame.Surface, player: Player) -> None:
     rect = pygame.Rect(
         round(player.rect.left),
@@ -55,10 +62,17 @@ def draw_player(screen: pygame.Surface, player: Player) -> None:
     )
     pygame.draw.rect(screen, player.color, rect, border_radius=5)
 
+
 def draw_ball(screen: pygame.Surface, ball: Ball, color: tuple[int, int, int]) -> None:
     pygame.draw.circle(screen, color, (round(ball.x), round(ball.y)), 7)
 
-def draw_score(screen: pygame.Surface, font: pygame.font.Font, court: TennisCourt, color: tuple[int, int, int]) -> None:
+
+def draw_score(
+    screen: pygame.Surface,
+    font: pygame.font.Font,
+    court: TennisCourt,
+    color: tuple[int, int, int],
+) -> None:
     score_surface = font.render(
         f"Alto {court.top_score} - {court.bottom_score} Basso",
         True,
