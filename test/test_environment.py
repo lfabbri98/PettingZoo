@@ -226,13 +226,25 @@ def test_serve_is_hit_towards_the_opponent(side: str, expected_vy: float) -> Non
 
 
 def test_court_add_point_updates_the_correct_score() -> None:
-    court = TennisCourt({"width": 100, "height": 80})
+    court = TennisCourt({"width": 100, "height": 80}, 0, 0)
 
     court.add_point("top")
     court.add_point("bottom")
     court.add_point("bottom")
 
     assert (court.top_score, court.bottom_score) == (1, 2)
+
+
+def test_court_reset_score_zeroes_out_scores() -> None:
+    court = TennisCourt({"width": 100, "height": 80}, 0, 0)
+    court.add_point("top")
+    court.add_point("bottom")
+    court.add_point("bottom")
+    
+    court.reset_score()
+    
+    assert court.top_score == 0
+    assert court.bottom_score == 0
 
 
 def test_ball_hit_replaces_horizontal_velocity_with_shot_component() -> None:
