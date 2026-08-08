@@ -209,14 +209,20 @@ class Ball:
             return "top"
         return None
 
-    def reset(self, top_player: Player, bottom_player: Player) -> str:
+    def reset(
+        self,
+        top_player: Player,
+        bottom_player: Player,
+        rng: random.Random | None = None,
+    ) -> str:
         """Prepara un nuovo punto assegnando casualmente il servizio.
 
         La pallina viene posizionata sul giocatore che serve e resta ferma:
         sarà il suo primo colpo ad avviare lo scambio. Restituisce ``"top"``
         oppure ``"bottom"``, cioè il lato del servitore.
         """
-        server_side = random.choice(("top", "bottom"))
+        random_source = rng if rng is not None else random
+        server_side = random_source.choice(("top", "bottom"))
         server = top_player if server_side == "top" else bottom_player
         self.x = server.x
         self.y = server.y
