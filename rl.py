@@ -142,7 +142,7 @@ def classic_policy(
     if is_serving:
         return PlayerAction(
             direction=direction,
-            shot_force=random.choice((70, 80, 90)),
+            shot_force=random.choice((110, 120, 130)),
             shot_angle=random.uniform(-player.max_shot_angle, player.max_shot_angle),
         )
 
