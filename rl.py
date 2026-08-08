@@ -78,6 +78,7 @@ def classic_policy(
     side: str,
     is_active: bool = True,
     is_serving: bool = False,
+    rng: random.Random | None = None,
 ) -> PlayerAction:
     """Avversario deterministico semplice per le prime fasi di training.
 
@@ -137,11 +138,13 @@ def classic_policy(
             else (direction_x / direction_length, direction_y / direction_length)
         )
 
+    random_source = rng if rng is not None else random
+
     if is_serving:
         return PlayerAction(
             direction=direction,
-            shot_force=random.choice((110, 120, 130)),
-            shot_angle=random.uniform(-player.max_shot_angle, player.max_shot_angle),
+            shot_force=random_source.choice((110, 120, 130)),
+            shot_angle=random_source.uniform(-player.max_shot_angle, player.max_shot_angle),
         )
 
     if ball_is_escaping_towards_baseline:
@@ -150,5 +153,5 @@ def classic_policy(
     return PlayerAction(
         direction=direction,
         shot_force=80,
-        shot_angle=random.uniform(-player.max_shot_angle, player.max_shot_angle),
+        shot_angle=random_source.uniform(-player.max_shot_angle, player.max_shot_angle),
     )
