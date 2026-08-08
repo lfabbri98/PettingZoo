@@ -8,9 +8,7 @@ from dataclasses import dataclass
 import math
 import random
 
-import pygame
-
-from environment import Ball, Player
+from environment import Ball, Player, BoundingBox
 
 
 @dataclass(frozen=True)
@@ -29,7 +27,7 @@ def observation(
     agent: Player,
     opponent: Player,
     ball: Ball,
-    court_bounds: pygame.Rect,
+    court_bounds: BoundingBox,
     agent_side: str,
 ) -> tuple[float, ...]:
     """Restituisce lo stato numerico visto dal punto di vista dell'agente.
@@ -76,7 +74,7 @@ def observation(
 def classic_policy(
     player: Player,
     ball: Ball,
-    court_bounds: pygame.Rect,
+    court_bounds: BoundingBox,
     side: str,
     is_active: bool = True,
     is_serving: bool = False,
