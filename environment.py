@@ -204,9 +204,10 @@ class Ball:
     def hit_by(self, player: Player, side: str | None = None) -> bool:
         """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
 
-        La forza scelta dal giocatore viene trasformata in un vettore secondo
-        l'angolo scelto. La componente verticale della pallina viene sempre
-        rivolta verso l'altra metà campo.
+        La velocità in arrivo e la forza scelta dal giocatore determinano il
+        modulo della nuova velocità. L'angolo scelto ne determina entrambe le
+        componenti, mentre il lato del giocatore orienta la pallina verso
+        l'altra metà campo.
         """
         player_id = id(player)
         if not player.rect.collidepoint(round(self.x), round(self.y)):
@@ -217,28 +218,14 @@ class Ball:
             return False
 
         angle_radians = math.radians(player.shot_angle)
-        shot_vx = player.shot_force * math.sin(angle_radians)
-        shot_vy = player.shot_force * math.cos(angle_radians)
         if side is not None and side not in ("top", "bottom"):
             raise ValueError(f"Lato giocatore non valido: {side}")
         outgoing_direction = (
             1 if side == "top" else -1 if side == "bottom" else -1 if self.vy > 0 else 1
         )
-        is_baseline_chase = (
-            side == "top" and self.vy < 0 and player.vy < 0
-        ) or (
-            side == "bottom" and self.vy > 0 and player.vy > 0
-        )
-        if is_baseline_chase:
-            # Il giocatore ha recuperato una palla che scappava verso il fondo:
-            # la rimanda dritta nell'altra metà campo, senza deriva laterale.
-            self.vx = 0
-            self.vy = outgoing_direction * (abs(self.vy) + shot_vy)
-        else:
-            # Il nuovo colpo determina interamente la direzione laterale della
-            # palla: non conserva la velocità orizzontale precedente.
-            self.vx = shot_vx
-            self.vy = outgoing_direction * (abs(self.vy) + shot_vy) + player.vy
+        outgoing_speed = math.hypot(self.vx, self.vy) + player.shot_force
+        self.vx = outgoing_speed * math.sin(angle_radians)
+        self.vy = outgoing_direction * outgoing_speed * math.cos(angle_radians)
         self.limit_speed()
         self._players_in_contact.add(player_id)
         return True
