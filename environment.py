@@ -2,7 +2,6 @@
 Definizione di ambiente e regole del simulatore
 """
 
-from dataclasses import dataclass
 import math
 import pygame
 import yaml
@@ -176,16 +175,23 @@ class Ball:
             return "top"
         return None
 
-    def reset(self, bounds: pygame.Rect) -> None:
-        """Rimette la pallina al centro con una nuova velocità casuale."""
-        self.x = bounds.centerx
-        self.y = bounds.centery
-        self.vx = random.choice((-1, 1)) * random.randint(80, 160)
-        self.vy = random.choice((-1, 1)) * random.randint(80, 160)
-        self.limit_speed()
-        self._players_in_contact.clear()
+    def reset(self, top_player: Player, bottom_player: Player) -> str:
+        """Prepara un nuovo punto assegnando casualmente il servizio.
 
-    def hit_by(self, player: Player) -> bool:
+        La pallina viene posizionata sul giocatore che serve e resta ferma:
+        sarà il suo primo colpo ad avviare lo scambio. Restituisce ``"top"``
+        oppure ``"bottom"``, cioè il lato del servitore.
+        """
+        server_side = random.choice(("top", "bottom"))
+        server = top_player if server_side == "top" else bottom_player
+        self.x = server.x
+        self.y = server.y
+        self.vx = 0
+        self.vy = 0
+        self._players_in_contact.clear()
+        return server_side
+
+    def hit_by(self, player: Player, side: str | None = None) -> bool:
         """Applica il colpo del giocatore se la pallina entra nel suo rettangolo.
 
         La forza scelta dal giocatore viene trasformata in un vettore secondo
@@ -203,7 +209,11 @@ class Ball:
         angle_radians = math.radians(player.shot_angle)
         shot_vx = player.shot_force * math.sin(angle_radians)
         shot_vy = player.shot_force * math.cos(angle_radians)
-        outgoing_direction = -1 if self.vy > 0 else 1
+        if side is not None and side not in ("top", "bottom"):
+            raise ValueError(f"Lato giocatore non valido: {side}")
+        outgoing_direction = (
+            1 if side == "top" else -1 if side == "bottom" else -1 if self.vy > 0 else 1
+        )
 
         self.vx += player.vx + shot_vx
         self.vy = outgoing_direction * (abs(self.vy) + shot_vy) + player.vy
