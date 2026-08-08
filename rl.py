@@ -83,52 +83,74 @@ def classic_policy(
 ) -> PlayerAction:
     """Avversario deterministico semplice per le prime fasi di training.
 
-    Il giocatore attivo rincorre la pallina. Quello inattivo recupera una
-    posizione difensiva al centro della propria metà, lontano dalla rete.
+    Il giocatore attivo rincorre la pallina solo quando questa è nella sua metà
+    campo. Negli altri casi si posiziona dietro la pallina: ne segue la
+    coordinata orizzontale, restando però lontano dalla rete.
     Durante il servizio, l'angolo laterale e la forza variano casualmente.
     """
     if side not in ("top", "bottom"):
         raise ValueError(f"Lato giocatore non valido: {side}")
 
-    if is_active:
+    ball_is_in_own_half = (
+        ball.y <= court_bounds.centery
+        if side == "top"
+        else ball.y >= court_bounds.centery
+    )
+    ball_is_escaping_towards_baseline = False
+    if is_active and ball_is_in_own_half:
         target_x, target_y = ball.x, ball.y
+        distance_x = target_x - player.x
+        distance_y = target_y - player.y
+        distance = math.hypot(distance_x, distance_y)
+        slowdown_distance = min(court_bounds.width, court_bounds.height) * 0.15
+        ball_is_escaping_towards_baseline = (
+            ball.vy < 0 and distance_y < 0
+            if side == "top"
+            else ball.vy > 0 and distance_y > 0
+        )
+        speed_factor = (
+            1.0
+            if ball_is_escaping_towards_baseline
+            else min(1.0, distance / slowdown_distance)
+        )
+        direction = (
+            (0.0, 0.0)
+            if distance == 0
+            else (
+                speed_factor * distance_x / distance,
+                speed_factor * distance_y / distance,
+            )
+        )
     else:
         recovery_margin = court_bounds.height * 0.15
-        target_x = court_bounds.centerx
+        target_x = ball.x
         target_y = (
             court_bounds.top + recovery_margin
             if side == "top"
             else court_bounds.bottom - recovery_margin
         )
 
-    direction_x = (target_x > player.x) - (target_x < player.x)
-    direction_y = (target_y > player.y) - (target_y < player.y)
-    direction_length = math.hypot(direction_x, direction_y)
-    direction = (
-        (0.0, 0.0)
-        if direction_length == 0
-        else (direction_x / direction_length, direction_y / direction_length)
-    )
+        direction_x = (target_x > player.x) - (target_x < player.x)
+        direction_y = (target_y > player.y) - (target_y < player.y)
+        direction_length = math.hypot(direction_x, direction_y)
+        direction = (
+            (0.0, 0.0)
+            if direction_length == 0
+            else (direction_x / direction_length, direction_y / direction_length)
+        )
 
     if is_serving:
-        serve_angle = min(player.max_shot_angle, 20)
         return PlayerAction(
             direction=direction,
             shot_force=random.choice((70, 80, 90)),
-            shot_angle=random.choice((-serve_angle, serve_angle)),
+            shot_angle=random.uniform(-player.max_shot_angle, player.max_shot_angle),
         )
 
-    horizontal_margin = court_bounds.width * 0.15
-    target_x = (
-        court_bounds.right - horizontal_margin
-        if player.x < court_bounds.centerx
-        else court_bounds.left + horizontal_margin
+    if ball_is_escaping_towards_baseline:
+        return PlayerAction(direction=direction, shot_force=80, shot_angle=0)
+
+    return PlayerAction(
+        direction=direction,
+        shot_force=80,
+        shot_angle=random.uniform(-player.max_shot_angle, player.max_shot_angle),
     )
-    target_y = (
-        court_bounds.bottom - horizontal_margin
-        if side == "top"
-        else court_bounds.top + horizontal_margin
-    )
-    angle = math.degrees(math.atan2(target_x - ball.x, abs(target_y - ball.y)))
-    angle = max(-player.max_shot_angle, min(player.max_shot_angle, angle))
-    return PlayerAction(direction=direction, shot_force=80, shot_angle=angle)
