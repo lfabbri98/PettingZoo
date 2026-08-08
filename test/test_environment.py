@@ -1,14 +1,14 @@
 import math
 
-import pygame
 import pytest
 import rl
 
-from environment import Ball, Player, TennisCourt, player_is_behind_ball
+from environment import Ball, BoundingBox, Player, TennisCourt, player_is_behind_ball
 from rl import classic_policy, observation
 
 
 PLAYER_CONFIG = {"width": 20, "height": 10, "max_speed": 50}
+COURT_BOUNDS = BoundingBox(0, 0, 100, 100)
 
 
 def make_player(x: float = 50, y: float = 50) -> Player:
@@ -49,7 +49,7 @@ def test_player_reset_restores_initial_position_and_stops_movement() -> None:
 
 def test_player_stays_inside_the_court() -> None:
     player = make_player(x=-10, y=200)
-    bounds = pygame.Rect(0, 0, 100, 100)
+    bounds = COURT_BOUNDS
 
     player.keep_inside(bounds)
 
@@ -68,7 +68,7 @@ def test_player_cannot_cross_the_net(
 ) -> None:
     player = make_player(y=initial_y)
 
-    player.keep_in_half(pygame.Rect(0, 0, 100, 100), side)
+    player.keep_in_half(COURT_BOUNDS, side)
 
     assert player.y == expected_y
 
@@ -76,7 +76,7 @@ def test_player_cannot_cross_the_net(
 def test_player_with_unknown_side_stays_inside_the_court() -> None:
     player = make_player(y=200)
 
-    player.keep_in_half(pygame.Rect(0, 0, 100, 100), "unknown")
+    player.keep_in_half(COURT_BOUNDS, "unknown")
 
     assert player.y == 95
 
@@ -112,7 +112,7 @@ def test_ball_move_updates_position() -> None:
     ],
 )
 def test_ball_bounces_on_lateral_court_edges(ball: Ball, expected: tuple[float, ...]) -> None:
-    ball.keep_inside(pygame.Rect(0, 0, 100, 100))
+    ball.keep_inside(COURT_BOUNDS)
 
     assert (ball.x, ball.y, ball.vx, ball.vy) == expected
 
@@ -131,7 +131,7 @@ def test_ball_check_point_detects_the_opponent_of_the_exit_side(
 ) -> None:
     ball = Ball(50, ball_y, 0, 0)
 
-    assert ball.check_point(pygame.Rect(0, 0, 100, 100)) == scorer
+    assert ball.check_point(COURT_BOUNDS) == scorer
 
 
 def test_classic_policy_slows_down_when_approaching_the_ball() -> None:
@@ -141,7 +141,7 @@ def test_classic_policy_slows_down_when_approaching_the_ball() -> None:
     ball.move(0.14)
 
     assert ball.y < bottom_player.y
-    action = classic_policy(bottom_player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(bottom_player, ball, COURT_BOUNDS, "bottom")
     assert action.direction == pytest.approx((0, -2 / 15))
     assert player_is_behind_ball(bottom_player, ball, "bottom") is True
 
@@ -150,7 +150,7 @@ def test_classic_policy_uses_maximum_speed_when_ball_is_far_away() -> None:
     player = make_player(x=50, y=80)
     ball = Ball(50, 60, 0, 0)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(player, ball, COURT_BOUNDS, "bottom")
 
     assert action.direction == (0, -1)
 
@@ -172,7 +172,7 @@ def test_classic_policy_does_not_slow_for_ball_escaping_to_baseline(
     player = make_player(*player_position)
     ball = Ball(*ball_position, 0, ball_vy)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), side)
+    action = classic_policy(player, ball, COURT_BOUNDS, side)
 
     assert action.direction == expected_direction
     assert action.shot_angle == 0
@@ -313,7 +313,7 @@ def test_observation_is_normalized_from_bottom_agent_perspective() -> None:
     opponent.move((-0.5, 0.5), 0)
     ball = Ball(40, 60, 25, -50, max_speed=100)
 
-    state = observation(agent, opponent, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    state = observation(agent, opponent, ball, COURT_BOUNDS, "bottom")
 
     assert state == pytest.approx(
         (0.25, 0.8, 0.5, -0.5, 0.75, 0.2, -0.5, 0.5, 0.4, 0.6, 0.25, -0.5)
@@ -327,7 +327,7 @@ def test_observation_mirrors_vertical_axis_for_top_agent() -> None:
     opponent.move((-0.5, -0.5), 0)
     ball = Ball(40, 40, 25, 50, max_speed=100)
 
-    state = observation(agent, opponent, ball, pygame.Rect(0, 0, 100, 100), "top")
+    state = observation(agent, opponent, ball, COURT_BOUNDS, "top")
 
     assert state == pytest.approx(
         (0.25, 0.8, 0.5, -0.5, 0.75, 0.2, -0.5, 0.5, 0.4, 0.6, 0.25, -0.5)
@@ -341,7 +341,7 @@ def test_classic_policy_returns_a_valid_move_and_shot(
     ball = Ball(80, 70, 0, 0)
     monkeypatch.setattr(rl.random, "uniform", lambda start, end: 0)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(player, ball, COURT_BOUNDS, "bottom")
 
     assert action.direction == pytest.approx((60 / (3700**0.5), -10 / (3700**0.5)))
     assert action.shot_force == 80
@@ -355,7 +355,7 @@ def test_classic_policy_varies_the_angle_of_normal_returns(
     ball = Ball(80, 70, 0, 0)
     monkeypatch.setattr(rl.random, "uniform", lambda start, end: 8)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(player, ball, COURT_BOUNDS, "bottom")
 
     assert action.shot_angle == 8
 
@@ -367,7 +367,7 @@ def test_random_policy_angle_changes_the_ball_trajectory(
     ball = Ball(player.x, player.y, 0, 25)
     monkeypatch.setattr(rl.random, "uniform", lambda start, end: 30)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(player, ball, COURT_BOUNDS, "bottom")
     player.choose_shot(action.shot_force, action.shot_angle)
 
     assert ball.hit_by(player, "bottom") is True
@@ -386,7 +386,7 @@ def test_classic_policy_varies_the_serve_choice(monkeypatch: pytest.MonkeyPatch)
     )
     monkeypatch.setattr(rl.random, "uniform", lambda start, end: 20)
     action = classic_policy(
-        player, ball, pygame.Rect(0, 0, 100, 100), "bottom", is_serving=True
+        player, ball, COURT_BOUNDS, "bottom", is_serving=True
     )
 
     assert action.shot_force == 90
@@ -409,7 +409,7 @@ def test_inactive_classic_player_returns_to_defensive_position(
     ball = Ball(50, 50, 0, 0)
 
     action = classic_policy(
-        player, ball, pygame.Rect(0, 0, 100, 100), side, is_active=False
+        player, ball, COURT_BOUNDS, side, is_active=False
     )
 
     assert action.direction == pytest.approx(expected_direction)
@@ -419,7 +419,7 @@ def test_active_classic_player_waits_defensively_for_ball_in_other_half() -> Non
     player = make_player(x=80, y=60)
     ball = Ball(50, 20, 0, 0)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(player, ball, COURT_BOUNDS, "bottom")
 
     assert action.direction == pytest.approx((-2**-0.5, 2**-0.5))
 
@@ -428,6 +428,6 @@ def test_waiting_classic_player_aligns_with_ball_instead_of_court_center() -> No
     player = make_player(x=55, y=60)
     ball = Ball(60, 20, 0, 0)
 
-    action = classic_policy(player, ball, pygame.Rect(0, 0, 100, 100), "bottom")
+    action = classic_policy(player, ball, COURT_BOUNDS, "bottom")
 
     assert action.direction == pytest.approx((2**-0.5, 2**-0.5))
