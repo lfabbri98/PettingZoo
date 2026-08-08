@@ -6,6 +6,7 @@ contiene gli avversari deterministici.
 
 from dataclasses import dataclass
 import math
+import random
 
 import pygame
 
@@ -77,19 +78,45 @@ def classic_policy(
     ball: Ball,
     court_bounds: pygame.Rect,
     side: str,
+    is_active: bool = True,
+    is_serving: bool = False,
 ) -> PlayerAction:
-    """Avversario deterministico semplice per le prime fasi di training."""
+    """Avversario deterministico semplice per le prime fasi di training.
+
+    Il giocatore attivo rincorre la pallina. Quello inattivo recupera una
+    posizione difensiva al centro della propria metà, lontano dalla rete.
+    Durante il servizio, l'angolo laterale e la forza variano casualmente.
+    """
     if side not in ("top", "bottom"):
         raise ValueError(f"Lato giocatore non valido: {side}")
 
-    direction_x = (ball.x > player.x) - (ball.x < player.x)
-    direction_y = (ball.y > player.y) - (ball.y < player.y)
+    if is_active:
+        target_x, target_y = ball.x, ball.y
+    else:
+        recovery_margin = court_bounds.height * 0.15
+        target_x = court_bounds.centerx
+        target_y = (
+            court_bounds.top + recovery_margin
+            if side == "top"
+            else court_bounds.bottom - recovery_margin
+        )
+
+    direction_x = (target_x > player.x) - (target_x < player.x)
+    direction_y = (target_y > player.y) - (target_y < player.y)
     direction_length = math.hypot(direction_x, direction_y)
     direction = (
         (0.0, 0.0)
         if direction_length == 0
         else (direction_x / direction_length, direction_y / direction_length)
     )
+
+    if is_serving:
+        serve_angle = min(player.max_shot_angle, 20)
+        return PlayerAction(
+            direction=direction,
+            shot_force=random.choice((70, 80, 90)),
+            shot_angle=random.choice((-serve_angle, serve_angle)),
+        )
 
     horizontal_margin = court_bounds.width * 0.15
     target_x = (
