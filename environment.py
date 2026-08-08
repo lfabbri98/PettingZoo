@@ -3,10 +3,37 @@ Definizione di ambiente e regole del simulatore
 """
 
 import math
-import pygame
 import yaml
 from pathlib import Path
 import random
+from dataclasses import dataclass
+
+@dataclass
+class BoundingBox:
+    left: float
+    top: float
+    width: float
+    height: float
+
+    @property
+    def right(self) -> float:
+        return self.left + self.width
+
+    @property
+    def bottom(self) -> float:
+        return self.top + self.height
+
+    @property
+    def centerx(self) -> float:
+        return self.left + self.width / 2
+
+    @property
+    def centery(self) -> float:
+        return self.top + self.height / 2
+
+    def collidepoint(self, px: float, py: float) -> bool:
+        return self.left <= px <= self.right and self.top <= py <= self.bottom
+
 
 def parse_parameters(config_name: str) -> dict:
     #Parsing parametri necessari. Ritorna un dizionario con dentro config
@@ -29,10 +56,10 @@ class Player:
     vy: float
 
     @property 
-    def rect(self) -> pygame.Rect:
-        return pygame.Rect(
-            round(self.x - self.width / 2),
-            round(self.y - self.height / 2),
+    def rect(self) -> BoundingBox:
+        return BoundingBox(
+            self.x - self.width / 2,
+            self.y - self.height / 2,
             self.width,
             self.height,
         )
@@ -88,14 +115,11 @@ class Player:
         self.shot_force = force
         self.shot_angle = angle
 
-    def draw(self, screen: pygame.Surface) -> None:
-        pygame.draw.rect(screen, self.color, self.rect, border_radius=5)
-
-    def keep_inside(self, bounds: pygame.Rect) -> None:
+    def keep_inside(self, bounds: BoundingBox) -> None:
         self.x = max(bounds.left + self.width/2, min(self.x, bounds.right-self.width/2))
         self.y = max(bounds.top + self.height / 2, min(self.y, bounds.bottom - self.height / 2))
 
-    def keep_in_half(self, bounds: pygame.Rect, side: str) -> None:
+    def keep_in_half(self, bounds: BoundingBox, side: str) -> None:
         """Mantiene il giocatore nella metà alta o bassa del campo."""
         self.keep_inside(bounds)
 
@@ -168,7 +192,7 @@ class Ball:
         self.x += self.vx * delta_time
         self.y += self.vy * delta_time
 
-    def keep_inside(self, bounds: pygame.Rect) -> None:
+    def keep_inside(self, bounds: BoundingBox) -> None:
         """Fa rimbalzare la pallina sui bordi laterali del campo."""
         if self.x <= bounds.left:
             self.x = bounds.left
@@ -177,7 +201,7 @@ class Ball:
             self.x = bounds.right
             self.vx = -abs(self.vx)
 
-    def check_point(self, bounds: pygame.Rect) -> str | None:
+    def check_point(self, bounds: BoundingBox) -> str | None:
         """Restituisce il giocatore che segna se la pallina supera il fondo campo."""
         if self.y < bounds.top:
             return "bottom"
@@ -210,7 +234,7 @@ class Ball:
         l'altra metà campo.
         """
         player_id = id(player)
-        if not player.rect.collidepoint(round(self.x), round(self.y)):
+        if not player.rect.collidepoint(self.x, self.y):
             self._players_in_contact.discard(player_id)
             return False
 
@@ -244,16 +268,24 @@ class TennisCourt:
 
     """Definizione del campo da gioco"""
 
-    width: int
-    length: int
+    width: float
+    length: float
+    x: float
+    y: float
     top_score: int
     bottom_score: int
 
-    def __init__(self, court_config):
+    def __init__(self, court_config, x: float, y: float):
         self.width = court_config["width"]
         self.length = court_config["height"]
+        self.x = x
+        self.y = y
         self.top_score = 0
         self.bottom_score = 0
+
+    @property
+    def bounds(self) -> BoundingBox:
+        return BoundingBox(self.x, self.y, self.width, self.length)
 
     def add_point(self, scorer: str) -> None:
         """Assegna un punto al giocatore indicato."""
@@ -263,55 +295,3 @@ class TennisCourt:
             self.bottom_score += 1
         else:
             raise ValueError(f"Giocatore non valido: {scorer}")
-
-    def draw_court(
-        self,
-        screen: pygame.Surface,
-        color: tuple[int, int, int] = (52, 122, 76),
-        line_color: tuple[int, int, int] = (245, 245, 240),
-    ) -> pygame.Rect:
-        """Disegna il campo centrato, con il lato lungo orientato verticalmente."""
-        court_rect = pygame.Rect(
-            (screen.get_width() - self.width) // 2,
-            (screen.get_height() - self.length) // 2,
-            self.width,
-            self.length,
-        )
-        pygame.draw.rect(screen, color, court_rect)
-
-        line_width = 3
-        center_y = court_rect.centery
-        top_service_y = court_rect.top + self.length // 4
-        bottom_service_y = court_rect.bottom - self.length // 4
-
-        # Perimetro, rete, linee di servizio e linea centrale di servizio.
-        pygame.draw.rect(screen, line_color, court_rect, line_width)
-        pygame.draw.line(
-            screen,
-            line_color,
-            (court_rect.left, center_y),
-            (court_rect.right, center_y),
-            line_width,
-        )
-        pygame.draw.line(
-            screen,
-            line_color,
-            (court_rect.left, top_service_y),
-            (court_rect.right, top_service_y),
-            line_width,
-        )
-        pygame.draw.line(
-            screen,
-            line_color,
-            (court_rect.left, bottom_service_y),
-            (court_rect.right, bottom_service_y),
-            line_width,
-        )
-        pygame.draw.line(
-            screen,
-            line_color,
-            (court_rect.centerx, top_service_y),
-            (court_rect.centerx, bottom_service_y),
-            line_width,
-        )
-        return court_rect
