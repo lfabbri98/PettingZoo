@@ -295,3 +295,8 @@ class TennisCourt:
             self.bottom_score += 1
         else:
             raise ValueError(f"Giocatore non valido: {scorer}")
+
+    def reset_score(self) -> None:
+        """Azzera il punteggio per iniziare una nuova partita."""
+        self.top_score = 0
+        self.bottom_score = 0
