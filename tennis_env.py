@@ -46,11 +46,11 @@ class TennisEnv:
     configurata. Ogni punto avvia un nuovo scambio. Il giocatore basso è
     controllato dall'agente; la policy del giocatore alto è iniettabile.
 
-    Il reward premia i punti del giocatore basso e penalizza quelli subiti.
-    Aggiunge un bonus alla vittoria, un piccolo costo a ogni decisione e, in
-    caso di timeout, un termine proporzionale alla differenza punti. Questi
-    ultimi due termini impediscono che un pareggio 0-0 al timeout sia una
-    strategia conveniente.
+    Il reward premia i punti e i colpi riusciti del giocatore basso, e
+    penalizza quelli subiti. Aggiunge un bonus alla vittoria, un piccolo costo
+    a ogni decisione e, in caso di timeout, un termine proporzionale alla
+    differenza punti. Questi ultimi due termini impediscono che un pareggio
+    0-0 al timeout sia una strategia conveniente.
 
     L'azione è una sequenza di quattro valori:
     ``[move_x, move_y, force, angle]``. ``move_x`` e ``move_y`` appartengono a
@@ -67,10 +67,11 @@ class TennisEnv:
         config_path: str | Path | None = None,
         *,
         max_steps_per_episode: int = 5_000,
-        points_to_win: int = 11,
+        points_to_win: int = 5,
         frame_skip: int = 4,
         opponent_policy: OpponentPolicy = classic_policy,
         point_reward: float = 1.0,
+        successful_hit_reward: float = 0.002,
         win_reward: float = 5.0,
         step_penalty: float = 0.0002,
         timeout_score_coefficient: float = 0.5,
@@ -83,6 +84,7 @@ class TennisEnv:
             raise ValueError("frame_skip deve essere positivo.")
         reward_parameters = {
             "point_reward": point_reward,
+            "successful_hit_reward": successful_hit_reward,
             "win_reward": win_reward,
             "step_penalty": step_penalty,
             "timeout_score_coefficient": timeout_score_coefficient,
@@ -101,6 +103,7 @@ class TennisEnv:
         self.frame_skip = frame_skip
         self.opponent_policy = opponent_policy
         self.point_reward = point_reward
+        self.successful_hit_reward = successful_hit_reward
         self.win_reward = win_reward
         self.step_penalty = step_penalty
         self.timeout_score_coefficient = timeout_score_coefficient
@@ -163,8 +166,10 @@ class TennisEnv:
         reward = -self.step_penalty
         terminated = False
         for _ in range(self.frame_skip):
-            self._advance(agent_action, self._opponent_action())
+            hitter = self._advance(agent_action, self._opponent_action())
             self._physics_steps += 1
+            if hitter == "bottom":
+                reward += self.successful_hit_reward
             scorer = self.ball.check_point(self.court.bounds)
             if scorer is not None:
                 self.court.add_point(scorer)
@@ -243,8 +248,8 @@ class TennisEnv:
 
     def _advance(
         self, agent_action: PlayerAction, opponent_action: PlayerAction
-    ) -> None:
-        """Esegue un singolo tick fisico per entrambi i giocatori."""
+    ) -> str | None:
+        """Esegue un tick fisico e restituisce chi ha colpito la pallina."""
         bounds = self.court.bounds
         self.top_player.move(opponent_action.direction, self.delta_time)
         self.bottom_player.move(agent_action.direction, self.delta_time)
@@ -253,7 +258,7 @@ class TennisEnv:
         self.ball.move(self.delta_time)
 
         if self.ball.check_point(bounds) is not None:
-            return
+            return None
 
         self.ball.keep_inside(bounds)
         self.top_player.choose_shot(
@@ -273,9 +278,12 @@ class TennisEnv:
         if self.active_player == "top" and top_is_behind_ball:
             if self.ball.hit_by(self.top_player, "top"):
                 self.active_player = "bottom"
+                return "top"
         elif self.active_player == "bottom" and bottom_is_behind_ball:
             if self.ball.hit_by(self.bottom_player, "bottom"):
                 self.active_player = "top"
+                return "bottom"
+        return None
 
     def _is_serving(self, side: str) -> bool:
         return (

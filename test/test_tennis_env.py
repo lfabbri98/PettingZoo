@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from environment import Ball, BoundingBox, Player
-from rl import PlayerAction, classic_policy
+from rl import PlayerAction, classic_policy, easy_policy, medium_policy
 from tennis_env import TennisEnv
 
 
@@ -63,7 +63,7 @@ def test_step_returns_observation_reward_end_flags_and_info() -> None:
     observation, reward, terminated, truncated, info = env.step((0, 0, 0.5, 0))
 
     assert len(observation) == 15
-    assert reward == pytest.approx(-0.0002)
+    assert reward == pytest.approx(-env.step_penalty)
     assert terminated is False
     assert truncated is True
     assert info["steps"] == 1
@@ -82,7 +82,25 @@ def test_timeout_reward_reflects_the_current_score_difference() -> None:
     assert terminated is False
     assert truncated is True
     assert info["scores"] == (1, 3)
-    assert reward == pytest.approx(0.9998)
+    expected_reward = (
+        -env.step_penalty
+        + env.timeout_score_coefficient * (env.court.bottom_score - env.court.top_score)
+    )
+    assert reward == pytest.approx(expected_reward)
+
+
+def test_successful_hit_adds_an_intermediate_reward(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = TennisEnv(max_steps_per_episode=1, frame_skip=1)
+    env.reset(seed=42)
+    monkeypatch.setattr(env, "_advance", lambda *_: "bottom")
+
+    _, reward, terminated, truncated, _ = env.step((0, 0, 0.5, 0))
+
+    assert terminated is False
+    assert truncated is True
+    assert reward == pytest.approx(-env.step_penalty + env.successful_hit_reward)
 
 
 def test_step_requires_reset_and_valid_action() -> None:
@@ -108,7 +126,12 @@ def test_episode_ends_when_either_player_reaches_eleven_points(winner: str) -> N
 
     _, reward, terminated, truncated, info = env.step((0, 0, 0, 0))
 
-    expected_reward = 5.9998 if winner == "bottom" else -6.0002
+    point_and_win_reward = env.point_reward + env.win_reward
+    expected_reward = (
+        -env.step_penalty + point_and_win_reward
+        if winner == "bottom"
+        else -env.step_penalty - point_and_win_reward
+    )
     assert reward == pytest.approx(expected_reward)
     assert terminated is True
     assert truncated is False
@@ -124,14 +147,14 @@ def test_non_terminal_point_returns_consistent_new_rally_state() -> None:
 
     observation, reward, terminated, truncated, info = env.step((0, 0, 0, 0))
 
-    assert reward == pytest.approx(0.9998)
+    assert reward == pytest.approx(-env.step_penalty + env.point_reward)
     assert terminated is False
     assert truncated is False
     assert info["scorer"] == "bottom"
     assert info["scores"] == (0, 1)
     assert info["active_player"] == env.active_player
     assert observation == env._get_observation()
-    assert observation[-3:-1] == pytest.approx((1 / 11, 0))
+    assert observation[-3:-1] == pytest.approx((1 / env.points_to_win, 0))
     expected_active = 1 if env.active_player == "bottom" else -1
     assert observation[-1] == expected_active
 
@@ -185,6 +208,50 @@ def test_custom_opponent_policy_is_used_for_each_physics_tick() -> None:
     assert calls == 3
 
 
+def test_curriculum_policies_scale_the_classic_opponent() -> None:
+    env = TennisEnv()
+    env.reset(seed=42)
+    kwargs = {
+        "is_active": True,
+        "is_serving": False,
+    }
+    classic = classic_policy(
+        env.top_player,
+        env.ball,
+        env.court.bounds,
+        "top",
+        rng=random.Random(7),
+        **kwargs,
+    )
+    easy = easy_policy(
+        env.top_player,
+        env.ball,
+        env.court.bounds,
+        "top",
+        rng=random.Random(7),
+        **kwargs,
+    )
+    medium = medium_policy(
+        env.top_player,
+        env.ball,
+        env.court.bounds,
+        "top",
+        rng=random.Random(7),
+        **kwargs,
+    )
+
+    assert easy.direction == pytest.approx(
+        (classic.direction[0] * 0.35, classic.direction[1] * 0.35)
+    )
+    assert easy.shot_force == pytest.approx(classic.shot_force * 0.55)
+    assert easy.shot_angle == pytest.approx(classic.shot_angle * 0.35)
+    assert medium.direction == pytest.approx(
+        (classic.direction[0] * 0.65, classic.direction[1] * 0.65)
+    )
+    assert medium.shot_force == pytest.approx(classic.shot_force * 0.75)
+    assert medium.shot_angle == pytest.approx(classic.shot_angle * 0.65)
+
+
 def test_ball_crossing_a_player_in_one_tick_is_hit(tmp_path) -> None:
     config_path = tmp_path / "parameters.yml"
     config_path.write_text(
@@ -235,7 +302,7 @@ def test_core_wrapper_does_not_import_pygame() -> None:
     assert result.stdout.strip() == "False"
 
 
-def test_complete_classic_match_reaches_eleven_before_default_timeout() -> None:
+def test_complete_classic_match_reaches_the_target_before_default_timeout() -> None:
     env = TennisEnv()
     env.reset(seed=0)
 
@@ -246,5 +313,5 @@ def test_complete_classic_match_reaches_eleven_before_default_timeout() -> None:
 
     assert terminated is True
     assert truncated is False
-    assert max(info["scores"]) == 11
+    assert max(info["scores"]) == env.points_to_win
     assert info["winner"] in ("top", "bottom")

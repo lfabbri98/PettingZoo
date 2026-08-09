@@ -2,7 +2,7 @@ import torch
 
 from model import ActorCritic
 from tennis_env import TennisEnv
-from train import PPOConfig, PPOTrainer, train
+from train import PPOConfig, PPOTrainer, evaluate, train
 
 
 def test_ppo_update_changes_model_and_clears_on_policy_buffer() -> None:
@@ -37,3 +37,19 @@ def test_training_saves_a_reusable_checkpoint(tmp_path) -> None:
 
     saved = torch.load(checkpoint, weights_only=True)
     assert set(saved) == {"model_state_dict", "ppo_config"}
+
+
+def test_evaluate_uses_deterministic_episodes() -> None:
+    result = evaluate(
+        lambda: TennisEnv(max_steps_per_episode=1),
+        ActorCritic(hidden_size=8),
+        episodes=3,
+        seed=5,
+    )
+
+    assert result.wins == 0
+    assert result.losses == 0
+    assert result.timeouts == 3
+    assert result.win_rate == 0
+    assert result.mean_agent_score == 0
+    assert result.mean_opponent_score == 0
