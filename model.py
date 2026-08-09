@@ -1,9 +1,4 @@
-"""Rete neurale di base per l'agente di tennis.
-
-Questo modulo non implementa ancora il training PPO. Definisce soltanto il
-modello Actor-Critic: una parte sceglie una distribuzione sulle azioni e una
-parte stima quanto sia favorevole lo stato corrente.
-"""
+#Rete neurale di base per l'agente di tennis.
 
 from __future__ import annotations
 
@@ -20,11 +15,8 @@ ACTION_SIZE = 4
 
 @dataclass(frozen=True)
 class ActionSample:
-    """Risultato di una scelta della policy.
-
-    ``raw_action`` resta nello spazio non limitato della distribuzione
-    gaussiana. Ci servirà quando implementeremo la loss PPO; ``action`` è
-    invece già convertita nei limiti richiesti da ``TennisEnv.step``.
+    """
+    Classe per rappresentare un esito della scelta della policy.
     """
 
     action: Tensor
