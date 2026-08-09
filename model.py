@@ -21,6 +21,7 @@ class ActionSample:
 
     action: Tensor
     raw_action: Tensor
+    log_prob: Tensor
     mean: Tensor
     value: Tensor
 
@@ -81,9 +82,11 @@ class ActorCritic(nn.Module):
         """
         distribution, value = self.distribution(observation)
         raw_action = distribution.mean if deterministic else distribution.sample()
+        log_prob = distribution.log_prob(raw_action).sum(dim=-1)
         return ActionSample(
             action=self._to_environment_action(raw_action),
             raw_action=raw_action,
+            log_prob=log_prob,
             mean=distribution.mean,
             value=value,
         )

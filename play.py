@@ -1,8 +1,6 @@
-"""Collegamento minimale tra il modello PyTorch e il simulatore di tennis.
-
-Non esegue alcun training: usa il modello corrente per giocare un episodio e
-restituisce il suo esito. Questo file sarà la base per la raccolta delle
-traiettorie nel passo successivo.
+"""
+Collegamento tra modello Pytorch e simulatore.
+Serve per rendere compatibile la struttura del simulatore con l'input. pytorch
 """
 
 from __future__ import annotations
@@ -14,6 +12,7 @@ import torch
 from torch import Tensor
 
 from model import ACTION_SIZE, OBSERVATION_SIZE, ActorCritic
+from rollout import RolloutBuffer
 from tennis_env import TennisEnv
 
 
@@ -52,6 +51,7 @@ def run_episode(
     *,
     seed: int | None = None,
     deterministic: bool = False,
+    buffer: RolloutBuffer | None = None,
 ) -> EpisodeResult:
     """Fa giocare al modello un episodio completo nel simulatore.
 
@@ -67,6 +67,15 @@ def run_episode(
         action = action_to_tuple(sample.action)
         observation, reward, terminated, truncated, info = environment.step(action)
         total_reward += reward
+        if buffer is not None:
+            buffer.add(
+                state=observation_tensor,
+                raw_action=sample.raw_action,
+                reward=reward,
+                done=terminated or truncated,
+                value=sample.value,
+                log_prob=sample.log_prob,
+            )
 
         if terminated or truncated:
             return EpisodeResult(
@@ -83,12 +92,13 @@ def main() -> None:
     """Esegue una breve partita di prova con una policy non ancora addestrata."""
     environment = TennisEnv(points_to_win=11, max_steps_per_episode=20_000)
     model = ActorCritic()
-    result = run_episode(environment, model, seed=42)
+    buffer = RolloutBuffer()
+    result = run_episode(environment, model, seed=42, buffer=buffer)
     print(
         "Episodio concluso: "
         f"reward={result.total_reward}, passi={result.steps}, "
         f"punteggio alto-basso={result.scores}, vincitore={result.winner}, "
-        f"timeout={result.truncated}"
+        f"timeout={result.truncated}, esperienze salvate={len(buffer)}"
     )
 
 
