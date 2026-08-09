@@ -257,6 +257,11 @@ class Ball:
             raise ValueError("La velocità massima della pallina deve essere positiva.")
         self.x = x
         self.y = y
+        # Posizione precedente: serve per non perdere collisioni quando la
+        # pallina attraversa un giocatore in un singolo tick fisico.
+        self.previous_x = x
+        self.previous_y = y
+        self._moved_since_last_collision = False
         self.vx = vx
         self.vy = vy
         self.max_speed = max_speed
@@ -275,6 +280,9 @@ class Ball:
 
     def move(self, delta_time: float) -> None:
         """Aggiorna la posizione della pallina in base alla sua velocità."""
+        self.previous_x = self.x
+        self.previous_y = self.y
+        self._moved_since_last_collision = True
         self.x += self.vx * delta_time
         self.y += self.vy * delta_time
 
@@ -312,6 +320,9 @@ class Ball:
         server = top_player if server_side == "top" else bottom_player
         self.x = server.x
         self.y = server.y
+        self.previous_x = self.x
+        self.previous_y = self.y
+        self._moved_since_last_collision = False
         self.vx = 0
         self.vy = 0
         self._players_in_contact.clear()
@@ -325,11 +336,13 @@ class Ball:
         orienta la pallina verso l'altra metà campo.
         """
         player_id = id(player)
-        if not player.rect.collidepoint(self.x, self.y):
+        if not self._crossed_player(player.rect):
             self._players_in_contact.discard(player_id)
+            self._moved_since_last_collision = False
             return False
 
         if player_id in self._players_in_contact:
+            self._moved_since_last_collision = False
             return False
 
         angle_radians = math.radians(player.shot_angle)
@@ -346,6 +359,45 @@ class Ball:
         self.vy = outgoing_direction * outgoing_speed * math.cos(angle_radians)
         self.limit_speed()
         self._players_in_contact.add(player_id)
+        self._moved_since_last_collision = False
+        return True
+
+    def _crossed_player(self, player_rect: BoundingBox) -> bool:
+        """Restituisce se l'ultimo spostamento interseca ``player_rect``.
+
+        Il controllo puntuale della sola posizione finale fa attraversare la
+        pallina un giocatore quando il tick è più lungo dell'altezza del suo
+        rettangolo. L'algoritmo di Liang-Barsky verifica invece il segmento
+        compreso fra la posizione precedente e quella corrente.
+        """
+        if (
+            not self._moved_since_last_collision
+            or player_rect.collidepoint(self.x, self.y)
+        ):
+            return player_rect.collidepoint(self.x, self.y)
+
+        delta_x = self.x - self.previous_x
+        delta_y = self.y - self.previous_y
+        parameters = (
+            (-delta_x, self.previous_x - player_rect.left),
+            (delta_x, player_rect.right - self.previous_x),
+            (-delta_y, self.previous_y - player_rect.top),
+            (delta_y, player_rect.bottom - self.previous_y),
+        )
+        entry_time = 0.0
+        exit_time = 1.0
+        for direction, distance in parameters:
+            if direction == 0:
+                if distance < 0:
+                    return False
+                continue
+            boundary_time = distance / direction
+            if direction < 0:
+                entry_time = max(entry_time, boundary_time)
+            else:
+                exit_time = min(exit_time, boundary_time)
+            if entry_time > exit_time:
+                return False
         return True
 
 

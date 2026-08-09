@@ -170,6 +170,28 @@ def test_custom_opponent_policy_is_used_for_each_physics_tick() -> None:
     assert calls == 3
 
 
+def test_ball_crossing_a_player_in_one_tick_is_hit(tmp_path) -> None:
+    config_path = tmp_path / "parameters.yml"
+    config_path.write_text(
+        Path("parameters.yml").read_text(encoding="utf-8").replace("fps: 60", "fps: 10"),
+        encoding="utf-8",
+    )
+    env = TennisEnv(config_path=config_path, frame_skip=1)
+    env.reset(seed=42)
+    env.active_player = "bottom"
+    env.ball.x = env.bottom_player.x
+    env.ball.y = env.bottom_player.y - env.bottom_player.height / 2 - 2
+    env.ball.previous_x = env.ball.x
+    env.ball.previous_y = env.ball.y
+    env.ball.vx = 0
+    env.ball.vy = env.ball.max_speed
+
+    env._advance(PlayerAction((0, 0), 150, 0), PlayerAction((0, 0), 150, 0))
+
+    assert env.active_player == "top"
+    assert env.ball.vy < 0
+
+
 def test_default_config_is_independent_from_current_directory(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

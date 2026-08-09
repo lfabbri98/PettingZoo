@@ -1,6 +1,4 @@
-import pytest
-
-torch = pytest.importorskip("torch")
+import torch
 
 from model import ACTION_SIZE, OBSERVATION_SIZE, ActorCritic
 
@@ -31,3 +29,16 @@ def test_actor_critic_supports_observation_batches() -> None:
     assert sample.action.shape == (5, ACTION_SIZE)
     assert torch.all(sample.action[:, 2] >= 0)
     assert torch.all(sample.action[:, 2] <= 1)
+
+
+def test_actor_critic_limits_an_extreme_standard_deviation() -> None:
+    model = ActorCritic()
+    with torch.no_grad():
+        model.log_std.fill_(1_000)
+
+    distribution, _ = model.distribution(torch.zeros(OBSERVATION_SIZE))
+
+    expected_std = torch.exp(torch.tensor(2.0))
+    assert torch.allclose(
+        distribution.scale, torch.full((ACTION_SIZE,), expected_std)
+    )

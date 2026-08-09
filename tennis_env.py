@@ -233,14 +233,18 @@ class TennisEnv:
         self.bottom_player.choose_shot(
             agent_action.shot_force, agent_action.shot_angle
         )
-        if self.active_player == "top" and player_is_behind_ball(
-            self.top_player, self.ball, "top"
-        ):
+        top_is_behind_ball = (
+            player_is_behind_ball(self.top_player, self.ball, "top")
+            or self.top_player.y <= self.ball.previous_y
+        )
+        bottom_is_behind_ball = (
+            player_is_behind_ball(self.bottom_player, self.ball, "bottom")
+            or self.bottom_player.y >= self.ball.previous_y
+        )
+        if self.active_player == "top" and top_is_behind_ball:
             if self.ball.hit_by(self.top_player, "top"):
                 self.active_player = "bottom"
-        elif self.active_player == "bottom" and player_is_behind_ball(
-            self.bottom_player, self.ball, "bottom"
-        ):
+        elif self.active_player == "bottom" and bottom_is_behind_ball:
             if self.ball.hit_by(self.bottom_player, "bottom"):
                 self.active_player = "top"
 

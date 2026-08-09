@@ -63,7 +63,9 @@ class ActorCritic(nn.Module):
     def distribution(self, observations: Tensor) -> tuple[Normal, Tensor]:
         """Costruisce la distribuzione della policy e restituisce anche ``V(s)``."""
         mean, value = self.forward(observations)
-        std = self.log_std.exp().expand_as(mean)
+        # Evita scale nulle/infinite se l'ottimizzazione porta log_std a
+        # valori estremi.
+        std = self.log_std.clamp(min=-20.0, max=2.0).exp().expand_as(mean)
         return Normal(mean, std), value
 
     @staticmethod

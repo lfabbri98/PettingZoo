@@ -28,11 +28,16 @@ class EpisodeResult:
     scores: tuple[int, int]
 
 
-def observation_to_tensor(observation: Sequence[float]) -> Tensor:
-    """Converte l'osservazione del simulatore in input PyTorch ``float32``."""
+def observation_to_tensor(
+    observation: Sequence[float],
+    *,
+    device: torch.device | str | None = None,
+    dtype: torch.dtype = torch.float32,
+) -> Tensor:
+    """Converte l'osservazione nel dtype e sul device richiesti dal modello."""
     if len(observation) != OBSERVATION_SIZE:
         raise ValueError(f"L'osservazione deve contenere {OBSERVATION_SIZE} valori.")
-    return torch.tensor(observation, dtype=torch.float32)
+    return torch.tensor(observation, dtype=dtype, device=device)
 
 
 def action_to_tuple(action: Tensor) -> tuple[float, float, float, float]:
@@ -60,20 +65,35 @@ def run_episode(
     """
     observation, _ = environment.reset(seed=seed)
     total_reward = 0.0
+    model_parameter = next(model.parameters())
+    model_device = model_parameter.device
+    model_dtype = model_parameter.dtype
 
     while True:
-        observation_tensor = observation_to_tensor(observation)
+        observation_tensor = observation_to_tensor(
+            observation, device=model_device, dtype=model_dtype
+        )
         sample = model.act(observation_tensor, deterministic=deterministic)
         action = action_to_tuple(sample.action)
         observation, reward, terminated, truncated, info = environment.step(action)
         total_reward += reward
         if buffer is not None:
+            if terminated:
+                next_value = torch.zeros((), device=model_device, dtype=model_dtype)
+            else:
+                next_observation_tensor = observation_to_tensor(
+                    observation, device=model_device, dtype=model_dtype
+                )
+                with torch.no_grad():
+                    _, next_value = model.forward(next_observation_tensor)
             buffer.add(
                 state=observation_tensor,
                 raw_action=sample.raw_action,
                 reward=reward,
-                done=terminated or truncated,
+                terminated=terminated,
+                truncated=truncated,
                 value=sample.value,
+                next_value=next_value,
                 log_prob=sample.log_prob,
             )
 
