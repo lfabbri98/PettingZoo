@@ -68,6 +68,21 @@ class ActorCritic(nn.Module):
         std = self.log_std.clamp(min=-20.0, max=2.0).exp().expand_as(mean)
         return Normal(mean, std), value
 
+    def evaluate_actions(
+        self, observations: Tensor, raw_actions: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """Valuta azioni latenti già campionate dalla policy.
+
+        PPO confronta le probabilità delle stesse azioni gaussiane raccolte
+        nel rollout. La trasformazione ``tanh`` viene applicata solo al
+        confine con l'ambiente; usare qui le azioni latenti evita di dover
+        invertire numericamente quella trasformazione.
+        """
+        distribution, values = self.distribution(observations)
+        log_probs = distribution.log_prob(raw_actions).sum(dim=-1)
+        entropy = distribution.entropy().sum(dim=-1)
+        return log_probs, entropy, values
+
     @staticmethod
     def _to_environment_action(raw_action: Tensor) -> Tensor:
         """Converte un'azione gaussiana nei limiti del simulatore."""
