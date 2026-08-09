@@ -63,12 +63,26 @@ def test_step_returns_observation_reward_end_flags_and_info() -> None:
     observation, reward, terminated, truncated, info = env.step((0, 0, 0.5, 0))
 
     assert len(observation) == 15
-    assert reward == 0
+    assert reward == pytest.approx(-0.0002)
     assert terminated is False
     assert truncated is True
     assert info["steps"] == 1
     assert info["physics_steps"] == 3
     assert info["winner"] is None
+
+
+def test_timeout_reward_reflects_the_current_score_difference() -> None:
+    env = TennisEnv(max_steps_per_episode=1, frame_skip=3)
+    env.reset(seed=42)
+    env.court.top_score = 1
+    env.court.bottom_score = 3
+
+    _, reward, terminated, truncated, info = env.step((0, 0, 0.5, 0))
+
+    assert terminated is False
+    assert truncated is True
+    assert info["scores"] == (1, 3)
+    assert reward == pytest.approx(0.9998)
 
 
 def test_step_requires_reset_and_valid_action() -> None:
@@ -94,7 +108,8 @@ def test_episode_ends_when_either_player_reaches_eleven_points(winner: str) -> N
 
     _, reward, terminated, truncated, info = env.step((0, 0, 0, 0))
 
-    assert reward == (1 if winner == "bottom" else -1)
+    expected_reward = 5.9998 if winner == "bottom" else -6.0002
+    assert reward == pytest.approx(expected_reward)
     assert terminated is True
     assert truncated is False
     assert info["scorer"] == winner
@@ -109,7 +124,7 @@ def test_non_terminal_point_returns_consistent_new_rally_state() -> None:
 
     observation, reward, terminated, truncated, info = env.step((0, 0, 0, 0))
 
-    assert reward == 1
+    assert reward == pytest.approx(0.9998)
     assert terminated is False
     assert truncated is False
     assert info["scorer"] == "bottom"

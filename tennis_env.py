@@ -46,6 +46,12 @@ class TennisEnv:
     configurata. Ogni punto avvia un nuovo scambio. Il giocatore basso è
     controllato dall'agente; la policy del giocatore alto è iniettabile.
 
+    Il reward premia i punti del giocatore basso e penalizza quelli subiti.
+    Aggiunge un bonus alla vittoria, un piccolo costo a ogni decisione e, in
+    caso di timeout, un termine proporzionale alla differenza punti. Questi
+    ultimi due termini impediscono che un pareggio 0-0 al timeout sia una
+    strategia conveniente.
+
     L'azione è una sequenza di quattro valori:
     ``[move_x, move_y, force, angle]``. ``move_x`` e ``move_y`` appartengono a
     ``[-1, 1]`` e sono normalizzati internamente se formano una diagonale.
@@ -64,6 +70,10 @@ class TennisEnv:
         points_to_win: int = 11,
         frame_skip: int = 4,
         opponent_policy: OpponentPolicy = classic_policy,
+        point_reward: float = 1.0,
+        win_reward: float = 5.0,
+        step_penalty: float = 0.0002,
+        timeout_score_coefficient: float = 0.5,
     ) -> None:
         if max_steps_per_episode <= 0:
             raise ValueError("max_steps_per_episode deve essere positivo.")
@@ -71,6 +81,16 @@ class TennisEnv:
             raise ValueError("points_to_win deve essere positivo.")
         if frame_skip <= 0:
             raise ValueError("frame_skip deve essere positivo.")
+        reward_parameters = {
+            "point_reward": point_reward,
+            "win_reward": win_reward,
+            "step_penalty": step_penalty,
+            "timeout_score_coefficient": timeout_score_coefficient,
+        }
+        if not all(math.isfinite(value) and value >= 0 for value in reward_parameters.values()):
+            raise ValueError("I parametri del reward devono essere finiti e non negativi.")
+        if point_reward == 0:
+            raise ValueError("point_reward deve essere positivo.")
 
         self.config_path = (
             Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
@@ -80,6 +100,10 @@ class TennisEnv:
         self.points_to_win = points_to_win
         self.frame_skip = frame_skip
         self.opponent_policy = opponent_policy
+        self.point_reward = point_reward
+        self.win_reward = win_reward
+        self.step_penalty = step_penalty
+        self.timeout_score_coefficient = timeout_score_coefficient
         self.delta_time = 1 / self.config["window"]["fps"]
         self._rng = random.Random()
         self._steps = 0
@@ -136,7 +160,7 @@ class TennisEnv:
 
         agent_action = self._agent_action(action_values)
         scorer = None
-        reward = 0.0
+        reward = -self.step_penalty
         terminated = False
         for _ in range(self.frame_skip):
             self._advance(agent_action, self._opponent_action())
@@ -144,17 +168,22 @@ class TennisEnv:
             scorer = self.ball.check_point(self.court.bounds)
             if scorer is not None:
                 self.court.add_point(scorer)
-                reward = 1.0 if scorer == "bottom" else -1.0
+                reward += self.point_reward if scorer == "bottom" else -self.point_reward
                 terminated = (
                     max(self.court.top_score, self.court.bottom_score)
                     >= self.points_to_win
                 )
+                if terminated:
+                    reward += self.win_reward if scorer == "bottom" else -self.win_reward
                 if not terminated:
                     self._reset_rally()
                 break
 
         self._steps += 1
         truncated = not terminated and self._steps >= self.max_steps_per_episode
+        if truncated:
+            score_difference = self.court.bottom_score - self.court.top_score
+            reward += self.timeout_score_coefficient * score_difference
         self._episode_finished = terminated or truncated
         winner = scorer if terminated else None
         info = self._get_info(scorer=scorer, winner=winner)
