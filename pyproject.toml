@@ -12,15 +12,10 @@ dependencies = [
 render = [
     "pygame>=2.6.1",
 ]
-train = [
-    "numpy>=2.0",
-    "torch>=2.5",
-]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "torch>=2.5",
 ]
 
 [tool.pytest.ini_options]

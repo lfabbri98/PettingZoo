@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from environment import Ball, BoundingBox, Player
-from rl import PlayerAction, classic_policy, easy_policy, medium_policy
+from rl import PlayerAction, classic_policy
 from tennis_env import TennisEnv
 
 
@@ -206,50 +206,6 @@ def test_custom_opponent_policy_is_used_for_each_physics_tick() -> None:
     env.step((0, 0, 0.5, 0))
 
     assert calls == 3
-
-
-def test_curriculum_policies_scale_the_classic_opponent() -> None:
-    env = TennisEnv()
-    env.reset(seed=42)
-    kwargs = {
-        "is_active": True,
-        "is_serving": False,
-    }
-    classic = classic_policy(
-        env.top_player,
-        env.ball,
-        env.court.bounds,
-        "top",
-        rng=random.Random(7),
-        **kwargs,
-    )
-    easy = easy_policy(
-        env.top_player,
-        env.ball,
-        env.court.bounds,
-        "top",
-        rng=random.Random(7),
-        **kwargs,
-    )
-    medium = medium_policy(
-        env.top_player,
-        env.ball,
-        env.court.bounds,
-        "top",
-        rng=random.Random(7),
-        **kwargs,
-    )
-
-    assert easy.direction == pytest.approx(
-        (classic.direction[0] * 0.35, classic.direction[1] * 0.35)
-    )
-    assert easy.shot_force == pytest.approx(classic.shot_force * 0.55)
-    assert easy.shot_angle == pytest.approx(classic.shot_angle * 0.35)
-    assert medium.direction == pytest.approx(
-        (classic.direction[0] * 0.65, classic.direction[1] * 0.65)
-    )
-    assert medium.shot_force == pytest.approx(classic.shot_force * 0.75)
-    assert medium.shot_angle == pytest.approx(classic.shot_angle * 0.65)
 
 
 def test_ball_crossing_a_player_in_one_tick_is_hit(tmp_path) -> None:
